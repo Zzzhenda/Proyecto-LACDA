@@ -22,7 +22,6 @@ Este proyecto tiene como objetivo anticipar, mediante un modelo de IA, si un pro
 - PostgreSQL  
 - Docker  
 - Git / GitHub  
-- Trello / Jira (planificación)
 
 ---
 
@@ -90,6 +89,6 @@ El documento de diseño técnico está disponible en:
 
 ## Equipo
 
-- Integrante 1 – Procesamiento y limpieza  
-- Integrante 2 – Modelado y entrenamiento  
-- Integrante 3 – Visualización y documentación
+- Nicolas Fernandez – Procesamiento y limpieza  
+- Bastian Gutierrez – Modelado y entrenamiento  
+- Victor Gutierrez – Visualización y documentación

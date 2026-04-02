@@ -16,12 +16,16 @@ Este proyecto tiene como objetivo anticipar, mediante un modelo de IA, si un pro
 ---
 
 ## Tecnologías utilizadas
-
+- VS Code
 - Python 3  
 - Pandas / Scikit-learn  
 - PostgreSQL  
-- Docker  
-- Git / GitHub  
+- Docker
+- Kubernetes
+- Render
+- Git / GitHub
+- GitHub Actions
+- Pandas
 
 ---
 

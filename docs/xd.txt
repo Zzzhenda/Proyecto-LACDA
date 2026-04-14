@@ -1,0 +1,2 @@
+cuando falta 1 dato ,y es cuantitativa: reemplazar con la media cuando son tipicos y con la mediana cuando son atipicos.
+

@@ -1,5 +1,5 @@
 # Proyecto-LACDA
-# Predicción de Agotamiento de Stock en Productos
+# Prediccion de Agotamiento de Stock en Productos
 
 Este proyecto tiene como objetivo anticipar, mediante un modelo de IA, si un producto en bodega se agotará en los próximos días, utilizando variables como historial de ventas, frecuencia de reposición y estacionalidad.
 
@@ -15,7 +15,7 @@ Este proyecto tiene como objetivo anticipar, mediante un modelo de IA, si un pro
 
 ---
 
-## Tecnologías utilizadas
+## Tecnologias utilizadas
 - VS Code
 - Python 3  
 - Pandas / Scikit-learn  
@@ -35,7 +35,7 @@ Este proyecto tiene como objetivo anticipar, mediante un modelo de IA, si un pro
 |-------|-------------|
 | 1. Diseño e instalación | Estructura de carpetas, setup del entorno, definición de herramientas |
 | 2. Ingesta | Lectura desde CSV (Kaggle o Mockaroo), carga a memoria |
-| 3. Limpieza | Eliminación de duplicados, tratamiento de nulos, revisión de tipos |
+| 3. Limpieza | Eliminacion de duplicados, tratamiento de nulos, revision de tipos |
 | 4. Transformación | Creación de variables como días sin reposición, tasa de ventas, etc. |
 | 5. Validación | Revisión de rangos, tipos, coherencia; validación básica |
 | 6. Carga en PostgreSQL | Subida del dataset limpio y validado a la base de datos local |
@@ -45,10 +45,10 @@ Este proyecto tiene como objetivo anticipar, mediante un modelo de IA, si un pro
 
 ---
 
-## 📂 Estructura del repositorio
+##  Estructura del repositorio
 
 ```
-agotamiento-stock/
+PROYECTO-LACDA/
 ├── README.md
 ├── docs/
 │   └── diseño_tecnico.pdf
@@ -66,7 +66,7 @@ agotamiento-stock/
 
 ---
 
-## Cómo ejecutar el sistema (entorno ya instalado)
+## Como ejecutar el sistema (entorno ya instalado)
 
 1. Clonar el repositorio  
    `git clone https://github.com/usuario/agotamiento-stock.git`
@@ -77,14 +77,15 @@ agotamiento-stock/
 3. Ejecutar el pipeline manualmente por etapas  
    Ejemplo:  
    `python scripts/ingesta.py`  
-   `python scripts/limpieza.py`  
+   `python scripts/limpieza.py` 
+   `python scripts/transformacion.py`
    `python scripts/entrenamiento.py`
 
-4. Visualizar los resultados y métricas desde consola o dashboard
+4. Visualizar los resultados y metricas desde consola o dashboard
 
 ---
 
-## Documentación técnica
+## Documentacion tecnica
 
 El documento de diseño técnico está disponible en:  
 [`docs/diseño_tecnico.pdf`](docs/diseño_tecnico.pdf)

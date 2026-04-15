@@ -94,6 +94,6 @@ El documento de diseño técnico está disponible en:
 
 ## Equipo
 
-- Nicolas Fernandez – Procesamiento y limpieza  
+- Victor Gutierrez – Procesamiento y limpieza  
 - Bastian Gutierrez – Modelado y entrenamiento  
-- Victor Gutierrez – Visualización y documentación
+- Nicolas Fernandez – Visualización y documentación

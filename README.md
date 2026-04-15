@@ -38,10 +38,9 @@ Este proyecto tiene como objetivo anticipar, mediante un modelo de IA, si un pro
 | 3. Limpieza | Eliminacion de duplicados, tratamiento de nulos, revision de tipos |
 | 4. Transformación | Creación de variables como días sin reposición, tasa de ventas, etc. |
 | 5. Validación | Revisión de rangos, tipos, coherencia; validación básica |
-| 6. Carga en PostgreSQL | Subida del dataset limpio y validado a la base de datos local |
-| 7. Entrenamiento IA | Clasificación binaria con scikit-learn para variable `SeAgotara` |
-| 8. Evaluación | Métricas como accuracy, recall; revisión de logs de ejecución |
-| 9. Visualización | Panel con predicciones, stock proyectado y alertas (si aplica) |
+| 6. Entrenamiento IA | Clasificación binaria con scikit-learn para variable `SeAgotara` |
+| 7. Evaluación | Métricas como accuracy, recall; revisión de logs de ejecución |
+| 8. Visualización | Panel con predicciones, stock proyectado y alertas (si aplica) |
 
 ---
 

@@ -1,98 +1,108 @@
-# Proyecto-LACDA
-# Prediccion de Agotamiento de Stock en Productos
+Sistema de Clasificación de Aprobación de Préstamos
+Este proyecto tiene como objetivo anticipar, mediante un modelo de IA, si una solicitud de préstamo bancario terminará en default (incumplimiento) o en pago exitoso, utilizando variables como historial crediticio, ingresos, experiencia laboral y monto del préstamo.
 
-Este proyecto tiene como objetivo anticipar, mediante un modelo de IA, si un producto en bodega se agotará en los próximos días, utilizando variables como historial de ventas, frecuencia de reposición y estacionalidad.
 
----
+Componentes del sistema
+Scripts de procesamiento: ingesta, limpieza, transformación y validación de datos.
+Base de datos PostgreSQL: para la carga y consulta estructurada del dataset.
+Modelo de IA (scikit-learn): clasificación binaria para predecir loan_status.
+Documentación: diseño técnico completo + planificación.
 
-## Componentes del sistema
 
-- **Scripts de procesamiento**: ingesta, limpieza, transformación y validación de datos.
-- **Base de datos PostgreSQL**: para la carga y consulta estructurada de los datasets.
-- **Modelo de IA (scikit-learn)**: clasificación binaria para predecir agotamiento.
-- **Metabase (opcional)**: dashboard de visualización de resultados.
-- **Documentación**: diseño técnico completo + planificación.
+Tecnologías utilizadas
+Python 3
+Pandas / NumPy / Scikit-learn
+PostgreSQL
+Docker
+Git / GitHub / GitHub Actions
+Render
 
----
 
-## Tecnologias utilizadas
-- VS Code
-- Python 3  
-- Pandas / Scikit-learn  
-- PostgreSQL  
-- Docker
-- Kubernetes
-- Render
-- Git / GitHub
-- GitHub Actions
-- Pandas
+Pipeline implementado
+Etapa
+Descripción
+1. Diseño e instalación
+Estructura de carpetas, setup del entorno, definición de herramientas
+2. Ingesta
+Lectura desde CSV, carga a memoria con pandas
+3. Limpieza
+Eliminación de duplicados, tratamiento de nulos, revisión de tipos
+4. Transformación
+Encoding de variables categóricas, normalización, validación de rangos
+5. Carga en PostgreSQL
+Subida del dataset limpio y validado a la base de datos local
+6. Entrenamiento IA
+Clasificación binaria con scikit-learn para la variable loan_status
+7. Evaluación
+Métricas: accuracy, F1, ROC-AUC; revisión de logs de ejecución
 
----
 
-## Pipeline implementado
 
-| Etapa | Descripción |
-|-------|-------------|
-| 1. Diseño e instalación | Estructura de carpetas, setup del entorno, definición de herramientas |
-| 2. Ingesta | Lectura desde CSV (Kaggle o Mockaroo), carga a memoria |
-| 3. Limpieza | Eliminacion de duplicados, tratamiento de nulos, revision de tipos |
-| 4. Transformación | Creación de variables como días sin reposición, tasa de ventas, etc. |
-| 5. Validación | Revisión de rangos, tipos, coherencia; validación básica |
-| 6. Entrenamiento IA | Clasificación binaria con scikit-learn para variable `SeAgotara` |
-| 7. Evaluación | Métricas como accuracy, recall; revisión de logs de ejecución |
-| 8. Visualización | Panel con predicciones, stock proyectado y alertas (si aplica) |
+Estructura del repositorio
+loan-approval-classification/
 
----
-
-##  Estructura del repositorio
-
-```
-PROYECTO-LACDA/
 ├── README.md
-├── docs/
-│   └── diseño_tecnico.pdf
-├── scripts/
-│   ├── ingesta.py
-│   ├── limpieza.py
-│   ├── transformacion.py
-│   └── entrenamiento.py
-├── data/
-│   └── productos_ventas.csv
-├── dashboards/
-│   └── dashboard_metabase.png
+
+├── requirements.txt
+
 ├── docker-compose.yml
-```
 
----
+├── docs/
 
-## Como ejecutar el sistema (entorno ya instalado)
+│   ├── diseño_tecnico.docx
 
-1. Clonar el repositorio  
-   `git clone https://github.com/usuario/agotamiento-stock.git`
+│   └── planificacion.docx
 
-2. Entrar a la carpeta del proyecto  
-   `cd agotamiento-stock`
+├── scripts/
 
-3. Ejecutar el pipeline manualmente por etapas  
-   Ejemplo:  
-   `python scripts/ingesta.py`  
-   `python scripts/limpieza.py` 
-   `python scripts/transformacion.py`
-   `python scripts/entrenamiento.py`
+│   ├── ingesta.py
 
-4. Visualizar los resultados y metricas desde consola o dashboard
+│   ├── limpieza.py
 
----
+│   ├── transformacion.py
 
-## Documentacion tecnica
+│   ├── carga_db.py
 
-El documento de diseño técnico está disponible en:  
-[`docs/diseño_tecnico.pdf`](docs/diseño_tecnico.pdf)
+│   └── entrenamiento.py
 
----
+├── data/
 
-## Equipo
+│   └── loan_data.csv
 
-- Victor Gutierrez – Procesamiento y limpieza  
-- Bastian Gutierrez – Modelado y entrenamiento  
-- Nicolas Fernandez – Visualización y documentación
+└── models/
+
+    └── modelo_clasificacion.pkl
+
+
+Cómo ejecutar el sistema (entorno ya instalado)
+Clonar el repositorio
+git clone https://github.com/grupo4/loan-approval-classification.git
+
+Entrar a la carpeta del proyecto
+cd loan-approval-classification
+
+Ejecutar el pipeline por etapas
+
+python scripts/ingesta.py
+
+python scripts/limpieza.py
+
+python scripts/transformacion.py
+
+python scripts/carga_db.py
+
+python scripts/entrenamiento.py
+
+Revisar métricas y resultados desde consola
+
+
+Documentación técnica
+El documento de diseño técnico está disponible en:
+docs/diseño_tecnico.docx
+
+
+Equipo — Grupo 4
+Nicolás Fernández Vera – Procesamiento y limpieza
+Bastián Gutiérrez – Modelado y entrenamiento
+Víctor Gutiérrez – Documentación y arquitectura
+

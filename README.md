@@ -1,4 +1,7 @@
 Sistema de Clasificación de Aprobación de Préstamos
+
+
+
 Este proyecto tiene como objetivo anticipar, mediante un modelo de IA, si una solicitud de préstamo bancario terminará en default (incumplimiento) o en pago exitoso, utilizando variables como historial crediticio, ingresos, experiencia laboral y monto del préstamo.
 
 

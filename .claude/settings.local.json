@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import pandas as pd; df=pd.read_csv\\('data/loan_data.csv'\\); print\\('dims:', df.shape\\); print\\('nulls:', df.isnull\\(\\).sum\\(\\).sum\\(\\)\\); print\\('dups:', df.duplicated\\(\\).sum\\(\\)\\); print\\('--- gender ---'\\); print\\(df.person_gender.value_counts\\(\\)\\); print\\('--- education ---'\\); print\\(df.person_education.value_counts\\(\\)\\); print\\('--- home ---'\\); print\\(df.person_home_ownership.value_counts\\(\\)\\); print\\('--- intent ---'\\); print\\(df.loan_intent.value_counts\\(\\)\\); print\\('--- defaults ---'\\); print\\(df.previous_loan_defaults_on_file.value_counts\\(\\)\\); print\\('--- status ---'\\); print\\(df.loan_status.value_counts\\(\\)\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(powershell -Command \"Start-Process 'C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe' -ErrorAction SilentlyContinue; Write-Host 'launched'\")",
+      "Bash(docker info *)",
+      "Bash(break)"
+    ]
+  }
+}

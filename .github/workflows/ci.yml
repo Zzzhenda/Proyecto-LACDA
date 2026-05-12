@@ -1,0 +1,73 @@
+name: CI - pipeline de datos
+
+# Se dispara en cada push y en cada pull request a main.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pipeline:
+    name: ingesta -> limpieza -> auditoria
+    runs-on: ubuntu-latest
+
+    # PostgreSQL como servicio efimero del runner.
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lacda
+          POSTGRES_PASSWORD: lacda_pass
+          POSTGRES_DB: loans
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lacda -d loans"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: lacda
+      DB_PASSWORD: lacda_pass
+      DB_NAME: loans
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Aplicar esquema de base de datos
+        run: psql "postgresql://lacda:lacda_pass@localhost:5432/loans" -f db/init.sql
+
+      - name: Ingesta
+        run: python scripts/ingesta.py
+
+      - name: Limpieza
+        run: python scripts/limpieza.py
+
+      - name: Transformacion (feature engineering)
+        run: python scripts/transformacion.py
+
+      - name: Auditoria de calidad
+        run: python scripts/auditoria.py
+
+      - name: Subir CSVs como artefactos
+        uses: actions/upload-artifact@v4
+        with:
+          name: datasets
+          path: |
+            data/loan_data_clean.csv
+            data/loan_data_transformed.csv
+          retention-days: 14

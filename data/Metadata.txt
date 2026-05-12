@@ -1,0 +1,19 @@
+Dataset: Loan Approval Classification Dataset (loan_data.csv)
+Fuente de verdad: este archivo describe los datos tal como aparecen en loan_data.csv.
+
+Columna					Descripción									Tipo de dato
+person_age				Edad del solicitante en años (rango observado: 20–144; el módulo de limpieza acota a 18–100)	Flotante (float)
+person_gender				Género del solicitante (male / female)						Categórico (string)
+person_education			Nivel educativo (High School, Bachelor, Master, Associate, Doctorate)		Categórico (string)
+person_income				Ingreso anual del solicitante							Flotante (float)
+person_emp_exp				Años de experiencia laboral (regla: ≤ person_age − 18)				Entero (int)
+person_home_ownership			Situación de vivienda (RENT / OWN / MORTGAGE / OTHER)				Categórico (string)
+loan_amnt				Monto del préstamo solicitado							Flotante (float)
+loan_intent				Propósito del préstamo (PERSONAL, EDUCATION, MEDICAL, VENTURE,
+					DEBTCONSOLIDATION, HOMEIMPROVEMENT)						Categórico (string)
+loan_int_rate				Tasa de interés anual expresada en porcentaje (ej: 16.02 = 16,02%; rango 5–30)	Flotante (float)
+loan_percent_income			Razón préstamo / ingreso anual; valor entre 0 y 1 (ej: 0.49 = 49%)		Flotante (float)
+cb_person_cred_hist_length		Años de historial crediticio (regla: ≥ 0 y ≤ person_age)			Flotante (float)
+credit_score				Puntuación crediticia del solicitante (rango FICO: 300–850)			Entero (int)
+previous_loan_defaults_on_file		Defaults anteriores (Yes / No)							Categórico (string)
+loan_status				Variable objetivo: 1 si default, 0 si pagado					Binario (int)

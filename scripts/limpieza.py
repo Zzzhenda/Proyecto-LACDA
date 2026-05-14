@@ -39,7 +39,13 @@ from sqlalchemy import text
 from db import get_engine
 
 
-CSV_OUT = Path(__file__).resolve().parent.parent / "data" / "loan_data_clean.csv"
+"""CSV_OUT = Path(__file__).resolve().parent.parent / "data" / "loan_data_clean.csv" """
+#para crear 2 csv
+
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+CSV_OUT_SOL = DATA_DIR / "solicitantes_clean.csv"
+CSV_OUT_PRE = DATA_DIR / "prestamos_clean.csv"
+
 
 COLS_SOLICITANTE = [
     "person_age", "person_gender", "person_education", "person_income",
@@ -63,7 +69,7 @@ CAT_DOMAINS = {
     "previous_loan_defaults_on_file": {"Yes", "No"},
 }
 
-
+## REGLAS A APLICAR 
 def aplicar_reglas(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
     """Recibe el join completo, devuelve el df limpio y estadisticas."""
     stats: dict[str, int] = {}
@@ -149,14 +155,20 @@ def main() -> None:
         n_sol = conn.execute(text("SELECT COUNT(*) FROM solicitantes_clean")).scalar()
         n_pre = conn.execute(text("SELECT COUNT(*) FROM prestamos_clean")).scalar()
 
-    print(f"[limpieza] Filas en solicitantes_clean: {n_sol}")
-    print(f"[limpieza] Filas en prestamos_clean:    {n_pre}")
-
-    # Export CSV (join plano, sin columnas tecnicas)
-    CSV_OUT.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(CSV_OUT, index=False)
-    print(f"[limpieza] CSV limpio guardado en {CSV_OUT}")
-
+    
+    # --- NUEVA LÓGICA DE EXPORTACIÓN CSV ---
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Preparar el DataFrame de solicitantes con su ID para el CSV
+    df_sol = df[COLS_SOLICITANTE].copy()
+    df_sol.insert(0, "id", ids["id"].values)
+    
+    # Guardar ambos archivos
+    df_sol.to_csv(CSV_OUT_SOL, index=False)
+    df_pre.to_csv(CSV_OUT_PRE, index=False) # df_pre ya tiene "solicitante_id" de la línea 81
+    
+    print(f"[limpieza] CSV de solicitantes guardado en {CSV_OUT_SOL}")
+    print(f"[limpieza] CSV de préstamos guardado en {CSV_OUT_PRE}")
 
 if __name__ == "__main__":
     main()

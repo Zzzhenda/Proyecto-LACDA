@@ -34,9 +34,6 @@ Proyecto-LACDA/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example
-├── .github/
-│   └── workflows/
-│       └── ci.yml                    (CI: corre la pipeline en cada push)
 ├── data/
 │   ├── loan_data.csv                 (entrada — dataset crudo)
 │   ├── loan_data_clean.csv           (salida — generada por la limpieza)

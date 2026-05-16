@@ -28,7 +28,16 @@ COLS_PRESTAMO = [
     "loan_amnt", "loan_intent", "loan_int_rate", "loan_percent_income",
     "previous_loan_defaults_on_file", "loan_status",
 ]
-
+CAT_DOMAINS = {
+    "person_gender": {"male", "female"},
+    "person_education": {"High School", "Bachelor", "Master", "Associate", "Doctorate"},
+    "person_home_ownership": {"RENT", "OWN", "MORTGAGE", "OTHER"},
+    "loan_intent": {
+        "PERSONAL", "EDUCATION", "MEDICAL", "VENTURE",
+        "DEBTCONSOLIDATION", "HOMEIMPROVEMENT",
+    },
+    "previous_loan_defaults_on_file": {"Yes", "No"},
+}
 
 def main() -> None:
     if not CSV_PATH.exists():

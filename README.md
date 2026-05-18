@@ -1,47 +1,134 @@
-# Sistema de Clasificacion de Aprobacion de Prestamos
+# Sistema de Clasificación de Aprobación de Préstamos
 
-Predecir si una solicitud de prestamo terminara en default o pago exitoso, sobre el dataset *Loan Approval Classification Dataset* (45.000 solicitudes, 14 variables).
+Pipeline DataOps para procesamiento y validación de datos sobre el dataset **Loan Approval Classification Dataset** (45.000 solicitudes bancarias, 14 variables).
 
-Esta entrega cubre el pipeline de datos. Entrenamiento, prediccion y API REST quedan fuera de alcance.
+El objetivo del proyecto es preparar datos limpios, validados y trazables para futuros modelos de IA orientados a predicción de default crediticio.
 
-## Pipeline
+> Esta entrega cubre únicamente la capa de gestión y procesamiento de datos.  
+> Entrenamiento de modelos, API REST y despliegue quedan como próximos pasos.
 
-1. **Ingesta** - CSV crudo a PostgreSQL (`solicitantes_raw`, `prestamos_raw`).
-2. **Quality check** - KPI baseline sobre `_raw` (sistema de monitoreo, informativo).
-3. **Limpieza** - reglas duras del cap. 9, imputacion y Winsorizer 5%. Genera tablas `_clean` y CSVs.
-4. **Transformacion** - features derivadas (`rate_x_pct_income`, `loan_burden`, `has_prev_defaults`), todas justificadas por EDA (ver `notebooks/features.ipynb`). Genera tablas `_transformed` y `loan_data_transformed.csv`.
-5. **Validacion** - gate de salida: reglas duras cap. 9 sobre `_clean` y `_transformed` (exit 1 si fallan).
+---
 
-## Como ejecutarlo
+# Pipeline
 
-Requiere Docker Desktop.
+## 1. Ingesta
+Carga del CSV crudo hacia PostgreSQL usando pandas + SQLAlchemy.
 
+Genera:
+- `solicitantes_raw`
+- `prestamos_raw`
+
+Características:
+- Separación por entidades
+- Idempotencia con TRUNCATE
+- Trazabilidad mediante `fecha_carga`
+
+---
+
+## 2. Limpieza
+Aplicación de reglas de negocio y validación de dominios.
+
+Incluye:
+- Eliminación de nulos
+- Validación de rangos
+- Validación semántica
+- Filtrado de inconsistencias
+
+Genera:
+- `solicitantes_clean`
+- `prestamos_clean`
+- `loan_data_clean.csv`
+
+---
+
+## 3. Transformación
+Creación de features derivadas para futuras etapas de Machine Learning.
+
+Features:
+- `rate_x_pct_income`
+- `loan_burden`
+- `has_prev_defaults`
+
+Genera:
+- `solicitantes_transformed`
+- `prestamos_transformed`
+- `loan_data_transformed.csv`
+
+---
+
+## 4. Validación
+Módulo de control de calidad automatizado integrado con CI/CD.
+
+Verifica:
+- Nulos
+- Duplicados
+- Rangos numéricos
+- Dominios categóricos
+- Coherencia semántica
+- Integridad de features derivadas
+
+Si una validación falla:
 ```bash
+exit 1
+
+El workflow de GitHub Actions marca el pipeline como fallido automáticamente.
+
+Ejecución
+
+Requiere:
+
+Docker Desktop
+Ejecutar pipeline completo
 docker compose build
 docker compose up
-```
 
-El contenedor `app` corre el pipeline completo y sale. Los datos quedan persistidos en el volumen `pg_data`.
+El pipeline ejecuta automáticamente:
 
-## Estructura
+ingesta → limpieza → transformación → validación
 
-```
+Los datos quedan persistidos en el volumen:
+
+pg_data
+Estructura del proyecto
 Proyecto-LACDA/
-├── data/                       CSV crudo + salidas del pipeline
-├── db/init.sql                 6 tablas (raw, clean, transformed x 2 entidades)
-├── docs/diseño_tecnico.pdf     fuente de verdad
-├── scripts/                    ingesta, qualitycheck, limpieza, transformacion, validacion
+├── data/                       Dataset y salidas CSV
+├── db/init.sql                 Esquema PostgreSQL
+├── scripts/
+│   ├── ingesta.py
+│   ├── limpieza.py
+│   ├── transformacion.py
+│   ├── qualitycheck.py
+│   └── validacion.py
+├── docs/
 ├── Dockerfile
 ├── docker-compose.yml
-└── .github/workflows/ci.yml    CI con Postgres efimero
-```
+└── .github/workflows/ci.yml
+Stack Tecnológico
+Python 3.12
+pandas
+SQLAlchemy
+PostgreSQL 16
+Docker Compose
+GitHub Actions
+CI/CD
 
-## Stack
+El proyecto utiliza GitHub Actions para:
 
-Python 3.12, pandas, SQLAlchemy, PostgreSQL 16, Docker Compose, GitHub Actions.
+ejecutar el pipeline automáticamente,
+validar calidad de datos,
+detectar errores antes de integrar cambios a main.
+Equipo — Grupo 4
+Nicolás Fernández Vera
 
-## Equipo - Grupo 4
+Data Engineer
+Procesamiento y limpieza
 
-- Nicolas Fernandez Vera - Procesamiento y limpieza
-- Bastian Gutierrez - Modelado y entrenamiento
-- Victor Gutierrez - Documentacion y arquitectura
+Bastián Gutiérrez
+
+Data Analyst
+Modelado y entrenamiento
+
+Víctor Gutiérrez
+
+ML Engineer
+Documentación y arquitectura

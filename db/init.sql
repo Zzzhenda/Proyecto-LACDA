@@ -82,9 +82,9 @@ CREATE TABLE IF NOT EXISTS solicitantes_transformed (
     person_home_ownership       VARCHAR(20),
     cb_person_cred_hist_length  NUMERIC(5,1),
     credit_score                INTEGER,
-    -- features derivadas del solicitante
-    fico_band                   SMALLINT,   -- 1..5 segun rango FICO
-    age_group                   SMALLINT,   -- 1=joven 2=adulto 3=senior
+    -- Sin features derivadas a nivel solicitante: el EDA mostro que
+    -- credit_score y person_age no correlacionan con loan_status en este
+    -- dataset (|corr| < 0.03). Ver notebooks/features.ipynb.
     fecha_carga                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -97,8 +97,10 @@ CREATE TABLE IF NOT EXISTS prestamos_transformed (
     loan_percent_income             NUMERIC(6,4),
     previous_loan_defaults_on_file  VARCHAR(5),
     loan_status                     SMALLINT,
-    -- feature derivada del prestamo
-    rate_x_pct_income               NUMERIC(8,4),
+    -- features derivadas (justificadas en notebooks/features.ipynb)
+    rate_x_pct_income               NUMERIC(8,4),  -- interaccion tasa x % ingreso (|corr| 0.46)
+    loan_burden                     NUMERIC(10,4), -- costo total / ingreso     (|corr| 0.40)
+    has_prev_defaults               SMALLINT,      -- 0/1 encoding              (|corr| 0.54)
     fecha_carga                     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

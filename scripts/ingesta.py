@@ -48,7 +48,7 @@ def main() -> None:
 
     engine = get_engine()
 
-    # Vaciar en orden inverso (primero hijos, luego padres) por FK
+    
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE TABLE prestamos_raw RESTART IDENTITY CASCADE"))
         conn.execute(text("TRUNCATE TABLE solicitantes_raw RESTART IDENTITY CASCADE"))
@@ -60,7 +60,7 @@ def main() -> None:
     with engine.connect() as conn:
         ids = pd.read_sql("SELECT id FROM solicitantes_raw ORDER BY id", conn)
 
-    # Cargar prestamos con FK al solicitante correspondiente (mismo orden)
+    
     df_pre = df[COLS_PRESTAMO].copy()
     df_pre.insert(0, "solicitante_id", ids["id"].values)
     df_pre.to_sql("prestamos_raw", engine, if_exists="append", index=False, chunksize=1000)

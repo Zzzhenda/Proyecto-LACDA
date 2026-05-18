@@ -52,6 +52,9 @@ jobs:
       - name: Ingesta
         run: python scripts/ingesta.py
 
+      - name: Quality check (baseline raw)
+        run: python scripts/qualitycheck.py
+
       - name: Limpieza
         run: python scripts/limpieza.py
 

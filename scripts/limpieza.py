@@ -40,11 +40,7 @@ from sqlalchemy import text
 from db import get_engine
 
 
-# ---------------------------------------------------------
-# Winsorizer (adaptado de PROFESORA/winsorizer.py)
-# Recorta cada columna a los cuantiles [limits[0], 1 - limits[1]].
-# Solo se usa aqui, asi que lo dejamos en el mismo archivo.
-# ---------------------------------------------------------
+
 class Winsorizer:
     def __init__(self, limits=(0.05, 0.05)):
         self.limits = limits

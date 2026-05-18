@@ -1,30 +1,24 @@
-"""Validacion estructural, semantica y KPI de calidad (fase 3 del pipeline).
+"""Validacion estructural y semantica (gate de salida del pipeline).
 
-Fusiona el chequeo binario (reglas duras del cap. 9) con el KPI continuo
-(QualityCheck adaptado de PROFESORA/quality_check.py). Cubre dos apartados
-de la rubrica EP2:
+Verifica que las tablas _clean y _transformed cumplan todas las reglas
+duras del cap. 9 del diseño tecnico. Es el contrato de calidad de
+salida: si algo no pasa, el build falla y el CI se marca en rojo.
 
-  * Validacion estructural y semantica (etapa del pipeline).
-  * Sistema de monitoreo con KPIs y alertas (calidad de datos).
+Para el sistema de monitoreo con KPIs y alertas (rubrica EP2 punto 2),
+ver qualitycheck.py — corre antes en el pipeline sobre las tablas _raw.
 
 Codigos de salida:
-  0 - todo OK
+  0 - todas las reglas duras pasan
   1 - una regla dura del cap. 9 fallo (rompe el build / CI)
-  2 - quality_score < 50 en alguna tabla (alerta CRITICAL)
 """
 
 import sys
-from typing import Iterable, Optional
 
 import pandas as pd
 
 from db import get_engine
 from limpieza import CAT_DOMAINS
 
-
-# ============================================================
-# A) Reglas duras del cap. 9 (validacion estructural + semantica)
-# ============================================================
 
 CAT_SOLICITANTE = {k: v for k, v in CAT_DOMAINS.items()
                    if k in ("person_gender", "person_education", "person_home_ownership")}
@@ -93,133 +87,24 @@ def auditar_prestamos(df: pd.DataFrame) -> list[str]:
 
 
 def auditar_features_solicitante(df: pd.DataFrame) -> list[str]:
-    fallos = auditar_solicitantes(df.drop(columns=["fico_band", "age_group"], errors="ignore"))
-    if not df["fico_band"].isin([1, 2, 3, 4, 5]).all():
-        fallos.append("solicitantes_transformed.fico_band: valores fuera de {1..5}")
-    if not df["age_group"].isin([1, 2, 3]).all():
-        fallos.append("solicitantes_transformed.age_group: valores fuera de {1..3}")
-    return fallos
+    # solicitantes_transformed no agrega features propias en esta entrega;
+    # los predictores significativos de la entidad solicitante son
+    # categoricos (previous_loan_defaults_on_file, home_ownership) y se
+    # encodean en el pipeline de ML, no aqui.
+    return auditar_solicitantes(df)
 
 
 def auditar_features_prestamo(df: pd.DataFrame) -> list[str]:
-    fallos = auditar_prestamos(df.drop(columns=["rate_x_pct_income"], errors="ignore"))
+    extra = ["rate_x_pct_income", "loan_burden", "has_prev_defaults"]
+    fallos = auditar_prestamos(df.drop(columns=extra, errors="ignore"))
     if (df["rate_x_pct_income"] < 0).any():
         fallos.append("prestamos_transformed.rate_x_pct_income: tiene valores negativos")
+    if (df["loan_burden"] < 0).any():
+        fallos.append("prestamos_transformed.loan_burden: tiene valores negativos")
+    if not df["has_prev_defaults"].isin([0, 1]).all():
+        fallos.append("prestamos_transformed.has_prev_defaults: valores fuera de {0, 1}")
     return fallos
 
-
-# ============================================================
-# B) KPI de calidad (QualityCheck adaptado del material docente)
-# ============================================================
-
-PESOS = {
-    "nulos/faltantes": 0.30,
-    "duplicados": 0.20,
-    "outliers": 0.20,
-    "inconsistencias": 0.30,
-}
-
-UMBRAL_WARNING = 70.0   # score < 70 -> WARNING (no rompe el build)
-UMBRAL_CRITICAL = 50.0  # score < 50 -> CRITICAL (sys.exit 2)
-
-
-class QualityCheck:
-    """Diagnostico cuantitativo del estado de un DataFrame depurado."""
-
-    def __init__(
-        self,
-        data: pd.DataFrame,
-        exclude_inconsistencies: Optional[Iterable[str]] = None,
-    ):
-        self.data = data
-        self.exclude_inconsistencies = list(exclude_inconsistencies or [])
-
-    def has_nulls(self) -> bool:
-        return bool(self.data.isnull().values.any())
-
-    def has_duplicates(self) -> bool:
-        return bool(self.data.duplicated().any())
-
-    def has_outliers(self) -> bool:
-        num = self.data.select_dtypes(include=["number"])
-        for col in num.columns:
-            q1 = num[col].quantile(0.25)
-            q3 = num[col].quantile(0.75)
-            iqr = q3 - q1
-            lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
-            if ((num[col] < lo) | (num[col] > hi)).any():
-                return True
-        return False
-
-    def has_negative_values(self) -> bool:
-        num = self.data.select_dtypes(include=["number"]).drop(
-            columns=[c for c in self.exclude_inconsistencies if c in self.data.columns],
-            errors="ignore",
-        )
-        for col in num.columns:
-            if (num[col] < 0).any():
-                return True
-        return False
-
-    def has_categorical_inconsistencies(self) -> bool:
-        cat = self.data.select_dtypes(include=["object"])
-        for col in cat.columns:
-            valores = cat[col].dropna().astype(str)
-            normalizados = valores.str.strip().str.lower()
-            if valores.nunique() != normalizados.nunique():
-                return True
-        return False
-
-    def has_inconsistencies(self) -> bool:
-        return self.has_negative_values() or self.has_categorical_inconsistencies()
-
-    def quality_score_weighted(self) -> float:
-        checks = {
-            "nulos/faltantes": self.has_nulls(),
-            "duplicados": self.has_duplicates(),
-            "outliers": self.has_outliers(),
-            "inconsistencias": self.has_inconsistencies(),
-        }
-        penalizacion = sum(PESOS[k] for k, v in checks.items() if v)
-        return round((1 - penalizacion) * 100, 2)
-
-    def quality_report(self) -> dict:
-        return {
-            "nulos/faltantes": self.has_nulls(),
-            "duplicados": self.has_duplicates(),
-            "outliers": self.has_outliers(),
-            "inconsistencias": self.has_inconsistencies(),
-            "quality_score": self.quality_score_weighted(),
-        }
-
-
-def nivel_alerta(score: float) -> str:
-    if score < UMBRAL_CRITICAL:
-        return "CRITICAL"
-    if score < UMBRAL_WARNING:
-        return "WARNING"
-    return "OK"
-
-
-def imprimir_reporte(nombre: str, qc: QualityCheck) -> str:
-    rep = qc.quality_report()
-    score = rep["quality_score"]
-    nivel = nivel_alerta(score)
-    flags = "  ".join(
-        f"{k}={'OK' if not rep[k] else 'WARN'}"
-        for k in ("nulos/faltantes", "duplicados", "outliers", "inconsistencias")
-    )
-    marca = {"OK": " ", "WARNING": "!", "CRITICAL": "X"}[nivel]
-    print(
-        f"[validacion] [{marca}] {nombre:30s}  "
-        f"score={score:6.2f}/100  nivel={nivel:8s}  {flags}"
-    )
-    return nivel
-
-
-# ============================================================
-# Controlador
-# ============================================================
 
 def _read(table: str, engine) -> pd.DataFrame:
     df = pd.read_sql(f"SELECT * FROM {table}", engine)
@@ -260,21 +145,6 @@ def main() -> None:
 
     if not ok:
         sys.exit(1)
-
-    print()
-    print("[validacion] === KPI de calidad (QualityCheck) ===")
-    niveles = [
-        imprimir_reporte("solicitantes_clean", QualityCheck(df_sol_c)),
-        imprimir_reporte("prestamos_clean",
-                         QualityCheck(df_pre_c, exclude_inconsistencies=["loan_status"])),
-        imprimir_reporte("solicitantes_transformed",
-                         QualityCheck(df_sol_t, exclude_inconsistencies=["fico_band", "age_group"])),
-        imprimir_reporte("prestamos_transformed",
-                         QualityCheck(df_pre_t, exclude_inconsistencies=["loan_status"])),
-    ]
-    if any(n == "CRITICAL" for n in niveles):
-        print("[validacion] ALERTA CRITICA: quality_score < 50 en alguna tabla.")
-        sys.exit(2)
 
     defaults = int(df_pre_t["loan_status"].sum())
     pagados = int((df_pre_t["loan_status"] == 0).sum())

@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Pipeline completa: ingesta -> limpieza -> transformacion -> validacion.
+# Pipeline completa: ingesta -> qualitycheck -> limpieza -> transformacion -> validacion.
 # Si una etapa falla, las siguientes no se ejecutan (gracias a `&&`).
 # Para correr una etapa puntual: docker compose run --rm app python scripts/<etapa>.py
-CMD ["sh", "-c", "python scripts/ingesta.py && python scripts/limpieza.py && python scripts/transformacion.py && python scripts/validacion.py"]
+CMD ["sh", "-c", "python scripts/ingesta.py && python scripts/qualitycheck.py && python scripts/limpieza.py && python scripts/transformacion.py && python scripts/validacion.py"]

@@ -16,7 +16,8 @@
       "Bash(docker info *)",
       "Bash(docker context ls *)",
       "Bash(docker context *)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(jupyter --version)"
     ]
   }
 }

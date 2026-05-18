@@ -1,31 +1,38 @@
 """Modulo de transformacion: feature engineering sobre las entidades limpias.
 
-Lee solicitantes_clean y prestamos_clean, agrega tres features derivadas
+Lee solicitantes_clean y prestamos_clean, agrega 3 features derivadas
 deterministicas y escribe:
 
-  * solicitantes_transformed  (fico_band, age_group)
-  * prestamos_transformed     (rate_x_pct_income)
+  * solicitantes_transformed  (sin features extra; mantiene el contrato del schema)
+  * prestamos_transformed     (rate_x_pct_income, loan_burden, has_prev_defaults)
   * data/loan_data_transformed.csv (join plano para compatibilidad ML)
 
-Features derivadas:
+Features derivadas (todas a nivel prestamo, justificadas en
+notebooks/features.ipynb):
 
-  fico_band         -> solicitantes_transformed
-    Banda FICO oficial segun credit_score (entero 1..5).
+  rate_x_pct_income  -> prestamos_transformed
+    loan_int_rate * loan_percent_income.
+    Captura riesgo combinado tasa-ingreso. |corr| 0.46.
 
-  age_group         -> solicitantes_transformed
-    Segmento etario (entero 1=joven, 2=adulto, 3=senior).
+  loan_burden        -> prestamos_transformed
+    (loan_amnt * (1 + loan_int_rate/100)) / person_income.
+    Costo total del prestamo como fraccion del ingreso anual. |corr| 0.40.
 
-  rate_x_pct_income -> prestamos_transformed
-    loan_int_rate * loan_percent_income (captura riesgo combinado).
+  has_prev_defaults  -> prestamos_transformed
+    Encoding binario de previous_loan_defaults_on_file (Yes->1, No->0).
+    El predictor mas fuerte del dataset. |corr| 0.54.
 
-El encoding de categoricas y el escalado de numericas se delegan al
-pipeline de sklearn en la fase de modelado (evitar data leakage).
+Por que no hay features a nivel solicitante: el EDA mostro que credit_score
+y person_age no correlacionan con loan_status en este dataset (|corr| < 0.03),
+asi que fico_band y age_group no se justifican por evidencia.
+
+El encoding del resto de categoricas y el escalado de numericas se delegan
+al pipeline de sklearn en la fase de modelado (evita data leakage).
 """
 
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 from sqlalchemy import text
 
@@ -45,32 +52,12 @@ COLS_PRESTAMO = [
     "previous_loan_defaults_on_file", "loan_status",
 ]
 
-FICO_BANDS = [
-    (300, 579, 1),  # Poor
-    (580, 669, 2),  # Fair
-    (670, 739, 3),  # Good
-    (740, 799, 4),  # Very Good
-    (800, 850, 5),  # Exceptional
-]
-
-AGE_GROUPS = [
-    (18, 29, 1),   # Joven
-    (30, 54, 2),   # Adulto
-    (55, 100, 3),  # Senior
-]
-
-
-def _bandify(series: pd.Series, bandas: list[tuple[int, int, int]]) -> pd.Series:
-    out = pd.Series(np.nan, index=series.index, dtype="float64")
-    for lo, hi, valor in bandas:
-        out.loc[series.between(lo, hi, inclusive="both")] = valor
-    return out.astype("Int64")
+FEATURES_PRESTAMO = ["rate_x_pct_income", "loan_burden", "has_prev_defaults"]
 
 
 def main() -> None:
     engine = get_engine()
 
-    # Leer join completo desde clean
     query = """
         SELECT
             s.person_age, s.person_gender, s.person_education, s.person_income,
@@ -89,35 +76,39 @@ def main() -> None:
 
     print(f"[transformacion] Filas leidas (join): {len(df)}")
 
-    # Features derivadas
-    df["fico_band"] = _bandify(df["credit_score"], FICO_BANDS)
-    df["age_group"] = _bandify(df["person_age"], AGE_GROUPS)
+    # Features derivadas (todas a nivel prestamo)
     df["rate_x_pct_income"] = (df["loan_int_rate"] * df["loan_percent_income"]).round(4)
+    df["loan_burden"] = (
+        (df["loan_amnt"] * (1 + df["loan_int_rate"] / 100))
+        / df["person_income"].clip(lower=1)
+    ).round(4)
+    df["has_prev_defaults"] = (df["previous_loan_defaults_on_file"] == "Yes").astype("int64")
 
-    nuevos = ["fico_band", "age_group", "rate_x_pct_income"]
-    if df[nuevos].isnull().any().any():
+    if df[FEATURES_PRESTAMO].isnull().any().any():
         sys.exit("[transformacion] FALLA: features derivadas contienen NaN")
 
-    print(f"[transformacion] Features agregadas: {', '.join(nuevos)}")
-    print(f"[transformacion] Distribucion fico_band: "
-          f"{df['fico_band'].value_counts().sort_index().to_dict()}")
-    print(f"[transformacion] Distribucion age_group: "
-          f"{df['age_group'].value_counts().sort_index().to_dict()}")
+    print(f"[transformacion] Features agregadas: {', '.join(FEATURES_PRESTAMO)}")
+    print(f"[transformacion] rate_x_pct_income  mean={df['rate_x_pct_income'].mean():.4f}  "
+          f"max={df['rate_x_pct_income'].max():.4f}")
+    print(f"[transformacion] loan_burden        mean={df['loan_burden'].mean():.4f}  "
+          f"max={df['loan_burden'].max():.4f}")
+    print(f"[transformacion] has_prev_defaults  dist="
+          f"{df['has_prev_defaults'].value_counts().sort_index().to_dict()}")
 
     # Vaciar en orden inverso por FK
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE TABLE prestamos_transformed RESTART IDENTITY CASCADE"))
         conn.execute(text("TRUNCATE TABLE solicitantes_transformed RESTART IDENTITY CASCADE"))
 
-    # Cargar solicitantes_transformed (con sus dos features)
-    df_sol = df[COLS_SOLICITANTE + ["fico_band", "age_group"]].copy()
+    # Cargar solicitantes_transformed (sin features extra)
+    df_sol = df[COLS_SOLICITANTE].copy()
     df_sol.to_sql("solicitantes_transformed", engine, if_exists="append", index=False, chunksize=1000)
 
     with engine.connect() as conn:
         ids = pd.read_sql("SELECT id FROM solicitantes_transformed ORDER BY id", conn)
 
-    # Cargar prestamos_transformed (con su feature)
-    df_pre = df[COLS_PRESTAMO + ["rate_x_pct_income"]].copy()
+    # Cargar prestamos_transformed (con las 3 features derivadas)
+    df_pre = df[COLS_PRESTAMO + FEATURES_PRESTAMO].copy()
     df_pre.insert(0, "solicitante_id", ids["id"].values)
     df_pre.to_sql("prestamos_transformed", engine, if_exists="append", index=False, chunksize=1000)
 
@@ -128,7 +119,7 @@ def main() -> None:
     print(f"[transformacion] Filas en solicitantes_transformed: {n_sol}")
     print(f"[transformacion] Filas en prestamos_transformed:    {n_pre}")
 
-    # Export CSV (join plano)
+    # Export CSV (join plano para ML)
     CSV_OUT.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(CSV_OUT, index=False)
     print(f"[transformacion] CSV transformado guardado en {CSV_OUT}")

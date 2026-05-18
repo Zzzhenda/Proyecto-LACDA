@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lacda
+          POSTGRES_PASSWORD: lacda_pass
+          POSTGRES_DB: loans
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lacda -d loans"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_USER: lacda
+      DB_PASSWORD: lacda_pass
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: loans
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Initialise schema
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f db/init.sql
+
+      - name: Ingesta
+        run: python scripts/ingesta.py
+
+      - name: Limpieza
+        run: python scripts/limpieza.py
+
+      - name: Transformacion
+        run: python scripts/transformacion.py
+
+      - name: Validacion
+        run: python scripts/validacion.py
+
+      - name: Upload depurated CSVs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: csvs-depurados
+          path: |
+            data/solicitantes_clean.csv
+            data/prestamos_clean.csv
+            data/loan_data_transformed.csv
+          if-no-files-found: warn

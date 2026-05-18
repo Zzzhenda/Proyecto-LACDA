@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pdftotext -layout \"ENCARGO.pdf\" -)",
+      "Bash(pdftotext -layout \"2.1.1 Pipeline de Datos – Ingesta de datos automatizada.pdf\" -)",
+      "Bash(pdftotext -layout \"2.3.1 Pipeline de Datos – Validación estructural y semántica de datos.pdf\" -)",
+      "Bash(pdftotext -layout \"PreparaciónDatos.pdf\" -)",
+      "Bash(pdftotext \"PreparaciónDatos.pdf\" -)",
+      "Bash(pdftotext -nopgbrk Preparaci*.pdf preparacion_out.txt)",
+      "Bash(python -c ' *)",
+      "Bash(pdftotext -layout \"1-Arquitecturas de datos para IA.pdf\" -)",
+      "Bash(pdftotext \"1-Arquitecturas de datos para IA.pdf\" arq.txt)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(powershell *)",
+      "Bash(docker info *)",
+      "Bash(docker context ls *)",
+      "Bash(docker context *)",
+      "Bash(python *)"
+    ]
+  }
+}

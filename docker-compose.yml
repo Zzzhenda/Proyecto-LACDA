@@ -1,18 +1,21 @@
+# Credenciales: docker-compose lee el archivo .env automaticamente si existe
+# (ver .env.example). Sin .env se usan los defaults de desarrollo local.
+# En produccion las credenciales NUNCA deben vivir en este archivo.
 services:
   db:
     image: postgres:16-alpine
     container_name: lacda_db
     environment:
-      POSTGRES_USER: lacda
-      POSTGRES_PASSWORD: lacda_pass
-      POSTGRES_DB: loans
+      POSTGRES_USER: ${POSTGRES_USER:-lacda}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lacda_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-loans}
     ports:
       - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lacda -d loans"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lacda} -d ${POSTGRES_DB:-loans}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -20,6 +23,15 @@ services:
   app:
     build: .
     container_name: lacda_app
+    # La imagen corre como usuario no-root por defecto (ver Dockerfile).
+    # Solo en desarrollo local se vuelve a root: el bind mount `.:/app` de
+    # Docker Desktop en Windows no permite escrituras de usuarios no-root.
+    # En CI/produccion (sin bind mount) la imagen se usa tal cual: no-root.
+    user: root
+    environment:
+      DB_USER: ${POSTGRES_USER:-lacda}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-lacda_pass}
+      DB_NAME: ${POSTGRES_DB:-loans}
     volumes:
       - .:/app
     working_dir: /app

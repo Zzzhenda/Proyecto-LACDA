@@ -9,4 +9,16 @@ __pycache__/
 .idea/
 .DS_Store
 *.log
-models/*.pkl
+# excepto la evidencia de ejecución del pipeline (la rúbrica pide logs)
+!docs/evidencias_pipeline.log
+
+# Salidas regeneradas por el pipeline (la fuente data/loan_data.csv SI se versiona)
+data/loan_data_raw.csv
+data/loan_data_clean.csv
+data/loan_data_transformed.csv
+
+# Salidas de la fase de modelado (regeneradas por train/test_model.py)
+data/X_test.csv
+data/y_test.csv
+models/
+results/

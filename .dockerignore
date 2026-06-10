@@ -1,17 +1,43 @@
+# La imagen Docker solo necesita: scripts/, db/, requirements.txt y la
+# fuente data/loan_data.csv (autocontenida para correr sin bind mount).
+# Todo lo demas queda fuera para una imagen minima.
+
+# Entornos y caches de Python
 venv/
 .venv/
 env/
-.git/
-.gitignore
 __pycache__/
 *.pyc
 *.pyo
+
+# Control de versiones y editores
+.git/
+.github/
+.gitignore
 .vscode/
 .idea/
 .DS_Store
+.claude/
+
+# Secretos
 .env
-*.log
+
+# Documentacion y material (no se ejecuta en el contenedor)
 docs/
+notebooks/
 README.md
+CLAUDE.md
+
+# Salidas regeneradas (el pipeline las crea en cada corrida)
+data/loan_data_raw.csv
+data/loan_data_clean.csv
+data/loan_data_transformed.csv
+data/X_test.csv
+data/y_test.csv
 models/
+results/
 *.pkl
+*.log
+
+# El dashboard corre local, no en el contenedor del pipeline
+dashboard.py

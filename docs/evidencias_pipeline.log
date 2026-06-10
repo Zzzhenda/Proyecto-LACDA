@@ -1,0 +1,74 @@
+En línea: 1 Carácter: 1
++ docker compose up --abort-on-container-exit 2>&1 | Tee-Object -FilePa ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ Container lacda_app Recreated
+Attaching to lacda_app, lacda_db
+ Container lacda_db Starting
+ Container lacda_db Started
+ Container lacda_db Waiting
+lacda_db  |
+lacda_db  | PostgreSQL Database directory appears to contain a database; Skipping initialization
+lacda_db  |
+lacda_db  | 2026-06-10 01:57:50.721 UTC [1] LOG:  starting PostgreSQL 16.13 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0)
+15.2.0, 64-bit
+lacda_db  | 2026-06-10 01:57:50.721 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+lacda_db  | 2026-06-10 01:57:50.722 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+lacda_db  | 2026-06-10 01:57:50.731 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+lacda_db  | 2026-06-10 01:57:50.746 UTC [29] LOG:  database system was shut down at 2026-06-10 01:57:13 UTC
+lacda_db  | 2026-06-10 01:57:50.762 UTC [1] LOG:  database system is ready to accept connections
+ Container lacda_db Healthy
+ Container lacda_app Starting
+ Container lacda_app Started
+lacda_app  | [ingesta] 01:57:59 [INFO] === INICIO INGESTA ===
+lacda_app  | [ingesta] 01:58:00 [INFO] Fuente leida: 45000 filas, 14 columnas
+lacda_app  | [ingesta] 01:58:00 [INFO] Estructura OK: las 14 columnas del contrato estan presentes.
+lacda_app  | [ingesta] 01:58:01 [INFO] Staging escrito: loan_data_raw.csv (45000 filas)
+lacda_app  | [ingesta] 01:58:01 [INFO] === INGESTA OK ===
+lacda_app  | [qualitycheck] 01:58:05 [INFO] === KPI DE CALIDAD SOBRE DATO CRUDO ===
+lacda_app  | [qualitycheck] 01:58:06 [INFO]   [OK  ] nulos/faltantes      0.00% de filas afectadas (peso 0.3)
+lacda_app  | [qualitycheck] 01:58:06 [INFO]   [OK  ] duplicados           0.00% de filas afectadas (peso 0.2)
+lacda_app  | [qualitycheck] 01:58:06 [INFO]   [WARN] outliers            34.31% de filas afectadas (peso 0.2)
+lacda_app  | [qualitycheck] 01:58:06 [INFO]   [OK  ] inconsistencias      0.00% de filas afectadas (peso 0.3)
+lacda_app  | [qualitycheck] 01:58:06 [INFO] QUALITY SCORE = 93.14/100  ->  nivel OK
+lacda_app  | [qualitycheck] 01:58:06 [INFO] === QUALITYCHECK OK (informativo, no rompe build) ===
+lacda_app  | [limpieza] 01:58:10 [INFO] === INICIO LIMPIEZA ===
+lacda_app  | [limpieza] 01:58:11 [INFO] Filas leidas del staging: 45000
+lacda_app  | [limpieza] 01:58:11 [INFO] Duplicados removidos: 0
+lacda_app  | [limpieza] 01:58:11 [INFO] Sin nulos que imputar.
+lacda_app  | [limpieza] 01:58:11 [INFO]   person_age: 7 valores fuera de [18, 100] -> clip
+lacda_app  | [limpieza] 01:58:11 [INFO] Rangos duros aplicados.
+lacda_app  | [limpieza] 01:58:11 [INFO] Reglas cruzadas (emp_exp, cred_hist_length) aplicadas.
+lacda_app  | [limpieza] 01:58:11 [INFO] Dominios categoricos aplicados.
+lacda_app  | [limpieza] 01:58:11 [INFO] Winsorizacion 5% aplicada sobre: ['person_income', 'loan_amnt']
+lacda_app  | [limpieza] 01:58:13 [INFO] Dataset limpio escrito: loan_data_clean.csv (45000 filas)
+lacda_app  | [limpieza] 01:58:13 [INFO] === LIMPIEZA OK ===
+lacda_app  | [transformacion] 01:58:15 [INFO] === INICIO TRANSFORMACION ===
+lacda_app  | [transformacion] 01:58:15 [INFO] Filas leidas del dataset limpio: 45000
+lacda_app  | [transformacion] 01:58:15 [INFO] Features agregadas: rate_x_pct_income, loan_burden, has_prev_defaults
+lacda_app  | [transformacion] 01:58:15 [INFO]   rate_x_pct_income  mean=1.5704  max=9.3789
+lacda_app  | [transformacion] 01:58:15 [INFO]   loan_burden        mean=0.1536  max=0.6808
+lacda_app  | [transformacion] 01:58:15 [INFO]   has_prev_defaults  dist={0: 22142, 1: 22858}
+lacda_app  | [transformacion] 01:58:18 [INFO] Dataset transformado escrito: loan_data_transformed.csv (45000 filas)
+lacda_app  | [transformacion] 01:58:18 [INFO] === TRANSFORMACION OK ===
+lacda_app  | [validacion] 01:58:22 [INFO] === INICIO VALIDACION (gate de calidad) ===
+lacda_app  | [validacion] 01:58:23 [INFO] Auditando 45000 filas de loan_data_transformed.csv
+lacda_app  | [validacion] 01:58:23 [INFO] Todas las reglas pasan. 45000 prestamos | 10000 defaults / 35000 pagados
+lacda_app  | [validacion] 01:58:23 [INFO] === VALIDACION OK -> ejecutando carga ===
+lacda_app  | [validacion] 01:58:38 [INFO] Tabla loan_data: 45000 filas cargadas y verificadas.
+lacda_app  | [validacion] 01:58:38 [INFO] === CARGA OK ===
+lacda_app exited with code 0
+ Compose Stopping Aborting on container exit...
+ Container lacda_app Stopping
+ Container lacda_app Stopped
+ Container lacda_db Stopping
+lacda_db   | 2026-06-10 01:58:39.273 UTC [1] LOG:  received fast shutdown request
+lacda_db   | 2026-06-10 01:58:39.279 UTC [1] LOG:  aborting any active transactions
+lacda_db   | 2026-06-10 01:58:39.284 UTC [1] LOG:  background worker "logical replication launcher" (PID 32) exited with exit code 1
+lacda_db   | 2026-06-10 01:58:39.284 UTC [27] LOG:  shutting down
+lacda_db   | 2026-06-10 01:58:39.288 UTC [27] LOG:  checkpoint starting: shutdown immediate
+lacda_db   | 2026-06-10 01:58:39.333 UTC [27] LOG:  checkpoint complete: wrote 960 buffers (5.9%); 0 WAL file(s) added, 0 removed, 1
+recycled; write=0.016 s, sync=0.012 s, total=0.049 s; sync files=11, longest=0.005 s, average=0.002 s; distance=13413 kB, estimate=13413
+kB; lsn=0/40B3E08, redo lsn=0/40B3E08
+lacda_db   | 2026-06-10 01:58:39.345 UTC [1] LOG:  database system is shut down
+ Container lacda_db Stopped
+lacda_db exited with code 0

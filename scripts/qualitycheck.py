@@ -1,35 +1,43 @@
-"""KPI de calidad de datos (sistema de monitoreo, fase 2 del pipeline).
+"""Etapa 2 — Monitoreo de calidad (KPIs con alertas).
 
-Mide la calidad de los datos en su estado crudo (_raw), justo despues
-de la ingesta y antes de la limpieza. Materializa el sistema de
-monitoreo con KPIs y alertas que pide la rubrica EP2.
+Mide la calidad del dato crudo (data/loan_data_raw.csv) justo despues de
+la ingesta y ANTES de la limpieza. Es el sistema de monitoreo del
+pipeline: no rompe el build (el dato crudo se espera sucio), pero deja
+un KPI trazable por corrida.
 
-A diferencia de validacion.py (gate de salida), aqui no se rompe el
-build: el dataset crudo se espera que tenga problemas. El proposito
-es:
-
-  * Observabilidad: detectar si la fuente de datos se degrada en el
-    tiempo (un score raw que cae entre corridas indica que el
-    proveedor de datos cambio algo).
+Proposito:
+  * Observabilidad: si el score baja entre corridas, la fuente de datos
+    se degrado (el proveedor cambio algo) y hay que investigar.
   * Diagnostico: saber con que estamos trabajando antes de tocarlo.
 
-Score 0-100 ponderado por 4 dimensiones:
+KPI: score 0-100 ponderado por 4 dimensiones de calidad. Cada dimension
+penaliza proporcionalmente al % de filas afectadas:
   * nulos / faltantes        (peso 0.30)
   * duplicados               (peso 0.20)
   * outliers (IQR 1.5x)      (peso 0.20)
   * inconsistencias          (peso 0.30)
 
-Codigo de salida:
-  0 - siempre (el KPI es informativo, no un gate)
+Alertas por umbral: OK (>= 70), WARNING (50-70), CRITICAL (< 50).
+
+Codigo de salida: 0 siempre (es monitoreo informativo, no un gate;
+el gate de salida del pipeline es validacion.py).
 """
 
+import logging
 import sys
-from typing import Iterable, Optional
+from pathlib import Path
 
 import pandas as pd
 
-from db import get_engine
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(name)s] %(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("qualitycheck")
 
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+CSV_RAW = DATA_DIR / "loan_data_raw.csv"
 
 PESOS = {
     "nulos/faltantes": 0.30,
@@ -45,71 +53,44 @@ UMBRAL_CRITICAL = 50.0
 class QualityCheck:
     """Diagnostico cuantitativo del estado de un DataFrame."""
 
-    def __init__(
-        self,
-        data: pd.DataFrame,
-        exclude_inconsistencies: Optional[Iterable[str]] = None,
-    ):
+    def __init__(self, data: pd.DataFrame):
         self.data = data
-        self.exclude_inconsistencies = list(exclude_inconsistencies or [])
 
-    def has_nulls(self) -> bool:
-        return bool(self.data.isnull().values.any())
+    def pct_nulos(self) -> float:
+        return float(self.data.isnull().values.mean() * 100)
 
-    def has_duplicates(self) -> bool:
-        return bool(self.data.duplicated().any())
+    def pct_duplicados(self) -> float:
+        return float(self.data.duplicated().mean() * 100)
 
-    def has_outliers(self) -> bool:
+    def pct_outliers(self) -> float:
+        """% de filas con al menos un outlier segun IQR 1.5x."""
         num = self.data.select_dtypes(include=["number"])
-        for col in num.columns:
-            q1 = num[col].quantile(0.25)
-            q3 = num[col].quantile(0.75)
-            iqr = q3 - q1
-            lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
-            if ((num[col] < lo) | (num[col] > hi)).any():
-                return True
-        return False
+        q1, q3 = num.quantile(0.25), num.quantile(0.75)
+        iqr = q3 - q1
+        mask = ((num < q1 - 1.5 * iqr) | (num > q3 + 1.5 * iqr)).any(axis=1)
+        return float(mask.mean() * 100)
 
-    def has_negative_values(self) -> bool:
-        num = self.data.select_dtypes(include=["number"]).drop(
-            columns=[c for c in self.exclude_inconsistencies if c in self.data.columns],
-            errors="ignore",
+    def pct_inconsistencias(self) -> float:
+        """% de filas que violan reglas semanticas basicas del dominio."""
+        df = self.data
+        mask = (
+            (df["person_income"] < 0)
+            | (df["loan_amnt"] <= 0)
+            | (df["person_emp_exp"] > df["person_age"] - 18)
+            | (df["cb_person_cred_hist_length"] > df["person_age"])
         )
-        for col in num.columns:
-            if (num[col] < 0).any():
-                return True
-        return False
+        return float(mask.mean() * 100)
 
-    def has_categorical_inconsistencies(self) -> bool:
-        cat = self.data.select_dtypes(include=["object"])
-        for col in cat.columns:
-            valores = cat[col].dropna().astype(str)
-            normalizados = valores.str.strip().str.lower()
-            if valores.nunique() != normalizados.nunique():
-                return True
-        return False
-
-    def has_inconsistencies(self) -> bool:
-        return self.has_negative_values() or self.has_categorical_inconsistencies()
-
-    def quality_score_weighted(self) -> float:
-        checks = {
-            "nulos/faltantes": self.has_nulls(),
-            "duplicados": self.has_duplicates(),
-            "outliers": self.has_outliers(),
-            "inconsistencias": self.has_inconsistencies(),
+    def quality_score(self) -> tuple[float, dict]:
+        """Score 0-100: cada dimension penaliza su peso * % de filas afectadas."""
+        dims = {
+            "nulos/faltantes": self.pct_nulos(),
+            "duplicados": self.pct_duplicados(),
+            "outliers": self.pct_outliers(),
+            "inconsistencias": self.pct_inconsistencias(),
         }
-        penalizacion = sum(PESOS[k] for k, v in checks.items() if v)
-        return round((1 - penalizacion) * 100, 2)
-
-    def quality_report(self) -> dict:
-        return {
-            "nulos/faltantes": self.has_nulls(),
-            "duplicados": self.has_duplicates(),
-            "outliers": self.has_outliers(),
-            "inconsistencias": self.has_inconsistencies(),
-            "quality_score": self.quality_score_weighted(),
-        }
+        penalizacion = sum(PESOS[k] * (v / 100) for k, v in dims.items())
+        return round((1 - penalizacion) * 100, 2), dims
 
 
 def nivel_alerta(score: float) -> str:
@@ -120,41 +101,24 @@ def nivel_alerta(score: float) -> str:
     return "OK"
 
 
-def imprimir_reporte(nombre: str, qc: QualityCheck) -> str:
-    rep = qc.quality_report()
-    score = rep["quality_score"]
-    nivel = nivel_alerta(score)
-    flags = "  ".join(
-        f"{k}={'OK' if not rep[k] else 'WARN'}"
-        for k in ("nulos/faltantes", "duplicados", "outliers", "inconsistencias")
-    )
-    marca = {"OK": " ", "WARNING": "!", "CRITICAL": "X"}[nivel]
-    print(
-        f"[qualitycheck] [{marca}] {nombre:20s}  "
-        f"score={score:6.2f}/100  nivel={nivel:8s}  {flags}"
-    )
-    return nivel
-
-
-def _read(table: str, engine) -> pd.DataFrame:
-    df = pd.read_sql(f"SELECT * FROM {table}", engine)
-    if df.empty:
-        sys.exit(f"[qualitycheck] {table} esta vacia. Corre la ingesta primero.")
-    return df.drop(columns=[c for c in ("id", "solicitante_id", "fecha_carga") if c in df.columns])
-
-
 def main() -> None:
-    engine = get_engine()
+    log.info("=== KPI DE CALIDAD SOBRE DATO CRUDO ===")
 
-    print("[qualitycheck] === KPI baseline sobre datos crudos (raw) ===")
-    df_sol = _read("solicitantes_raw", engine)
-    df_pre = _read("prestamos_raw", engine)
-    imprimir_reporte("solicitantes_raw", QualityCheck(df_sol))
-    imprimir_reporte(
-        "prestamos_raw",
-        QualityCheck(df_pre, exclude_inconsistencies=["loan_status"]),
-    )
-    print("[qualitycheck] OK (informativo, no rompe build)")
+    if not CSV_RAW.exists():
+        log.error(f"No existe {CSV_RAW}. Corre la ingesta primero.")
+        sys.exit(1)
+
+    df = pd.read_csv(CSV_RAW)
+    score, dims = QualityCheck(df).quality_score()
+    nivel = nivel_alerta(score)
+
+    for dim, pct in dims.items():
+        estado = "OK  " if pct == 0 else "WARN"
+        log.info(f"  [{estado}] {dim:18s} {pct:6.2f}% de filas afectadas (peso {PESOS[dim]})")
+
+    emitir = log.warning if nivel != "OK" else log.info
+    emitir(f"QUALITY SCORE = {score}/100  ->  nivel {nivel}")
+    log.info("=== QUALITYCHECK OK (informativo, no rompe build) ===")
 
 
 if __name__ == "__main__":

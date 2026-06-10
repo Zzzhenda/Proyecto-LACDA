@@ -52,7 +52,7 @@ jobs:
       - name: Ingesta
         run: python scripts/ingesta.py
 
-      - name: Quality check (baseline raw)
+      - name: Quality check (KPIs sobre dato crudo)
         run: python scripts/qualitycheck.py
 
       - name: Limpieza
@@ -61,16 +61,32 @@ jobs:
       - name: Transformacion
         run: python scripts/transformacion.py
 
-      - name: Validacion
+      - name: Validacion y carga (gate de calidad)
         run: python scripts/validacion.py
 
-      - name: Upload depurated CSVs
+      - name: Install ML dependencies
+        run: pip install scikit-learn matplotlib seaborn
+
+      - name: Entrenar modelo (lee desde loan_data en Postgres)
+        run: python scripts/train_model.py
+
+      - name: Evaluar modelo (gate de calidad ML, AUC >= 0.93)
+        run: python scripts/test_model.py
+
+      - name: Upload CSVs procesados
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: csvs-depurados
+          name: csvs-procesados
           path: |
-            data/solicitantes_clean.csv
-            data/prestamos_clean.csv
+            data/loan_data_clean.csv
             data/loan_data_transformed.csv
+          if-no-files-found: warn
+
+      - name: Upload resultados del modelo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-modelo
+          path: results/
           if-no-files-found: warn

@@ -1,156 +1,181 @@
-"""Validacion estructural y semantica (gate de salida del pipeline).
+"""Etapa 5 — Validacion estructural y semantica + carga final.
 
-Verifica que las tablas _clean y _transformed cumplan todas las reglas
-duras del cap. 9 del diseño tecnico. Es el contrato de calidad de
-salida: si algo no pasa, el build falla y el CI se marca en rojo.
+Audita data/loan_data_transformed.csv contra el contrato de datos
+(definido en ingesta.py) y, SOLO si todas las reglas pasan, carga el
+dataset en la tabla unica `loan_data` de PostgreSQL (db/init.sql).
 
-Para el sistema de monitoreo con KPIs y alertas (rubrica EP2 punto 2),
-ver qualitycheck.py — corre antes en el pipeline sobre las tablas _raw.
+Es el gate de calidad del pipeline: si UNA regla falla, sale con exit 1,
+la base de datos no se toca y el CI se marca en rojo. La carga es la
+consecuencia directa de pasar el gate — por eso viven en el mismo paso.
 
-Codigos de salida:
-  0 - todas las reglas duras pasan
-  1 - una regla dura del cap. 9 fallo (rompe el build / CI)
+Validacion estructural:
+  * estan todas las columnas (14 del contrato + 3 features derivadas),
+  * no hay valores nulos.
+
+Validacion semantica:
+  * rangos duros por columna (RANGOS),
+  * person_income >= 0, loan_amnt > 0,
+  * reglas cruzadas: emp_exp <= age - 18, cred_hist <= age,
+  * dominios categoricos cerrados (DOMINIOS), loan_status en {0,1},
+  * features derivadas: sin negativos, has_prev_defaults en {0,1}.
+
+Carga (si la validacion paso):
+  * TRUNCATE + INSERT dentro de una transaccion -> idempotente: re-correr
+    no duplica datos, y un fallo a mitad de camino revierte todo.
+  * Verificacion post-carga: el conteo en la tabla debe coincidir con el
+    CSV; si no, exit 1.
+  * `fecha_carga` (DEFAULT CURRENT_TIMESTAMP en el esquema) deja la
+    trazabilidad de cada corrida.
+
+A diferencia de qualitycheck.py (KPI informativo sobre el dato crudo),
+aqui el dato YA paso por limpieza: cualquier violacion es un bug del
+pipeline y debe romper el build.
 """
 
+import logging
+import os
 import sys
+from pathlib import Path
 
 import pandas as pd
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 
-from db import get_engine
-from limpieza import CAT_DOMAINS
+from ingesta import COLUMNAS, DOMINIOS, RANGOS
+from transformacion import FEATURES_DERIVADAS
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(name)s] %(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("validacion")
+
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+CSV_TRANSFORMED = DATA_DIR / "loan_data_transformed.csv"
+TABLA = "loan_data"
 
 
-CAT_SOLICITANTE = {k: v for k, v in CAT_DOMAINS.items()
-                   if k in ("person_gender", "person_education", "person_home_ownership")}
+def get_engine() -> Engine:
+    """Engine de SQLAlchemy a Postgres. Lee credenciales de variables de
+    entorno con defaults consistentes con docker-compose.yml: funciona
+    dentro del contenedor `app` (host=db) y localmente con DB_HOST=localhost."""
+    user = os.getenv("DB_USER", "lacda")
+    pwd = os.getenv("DB_PASSWORD", "lacda_pass")
+    host = os.getenv("DB_HOST", "db")
+    port = os.getenv("DB_PORT", "5432")
+    name = os.getenv("DB_NAME", "loans")
+    url = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{name}"
+    return create_engine(url, connect_args={"client_encoding": "utf8"})
 
-CAT_PRESTAMO = {k: v for k, v in CAT_DOMAINS.items()
-                if k in ("loan_intent", "previous_loan_defaults_on_file")}
+
+# ---------------------------------------------------------------------
+# Validacion
+# ---------------------------------------------------------------------
+
+def validar_estructura(df: pd.DataFrame) -> list[str]:
+    fallos = []
+    esperadas = set(COLUMNAS) | set(FEATURES_DERIVADAS)
+    faltantes = esperadas - set(df.columns)
+    if faltantes:
+        fallos.append(f"columnas faltantes: {sorted(faltantes)}")
+
+    nulos = int(df.isnull().sum().sum())
+    if nulos:
+        fallos.append(f"{nulos} valores nulos")
+    return fallos
 
 
-def auditar_solicitantes(df: pd.DataFrame) -> list[str]:
-    fallos: list[str] = []
+def validar_semantica(df: pd.DataFrame) -> list[str]:
+    fallos = []
 
-    if df.isnull().values.any():
-        fallos.append(f"solicitantes: {int(df.isnull().sum().sum())} valores nulos")
-
-    rangos = {"person_age": (18, 100), "credit_score": (300, 850)}
-    for col, (lo, hi) in rangos.items():
-        fuera = (~df[col].between(lo, hi)).sum()
+    for col, (lo, hi) in RANGOS.items():
+        fuera = int((~df[col].between(lo, hi)).sum())
         if fuera:
-            fallos.append(f"solicitantes.{col}: {fuera} filas fuera de [{lo}, {hi}]")
+            fallos.append(f"{col}: {fuera} filas fuera de [{lo}, {hi}]")
 
     if (df["person_income"] < 0).any():
-        fallos.append("solicitantes.person_income: tiene valores negativos")
-
-    cap_emp = df["person_age"] - 18
-    if (df["person_emp_exp"] > cap_emp).any() or (df["person_emp_exp"] < 0).any():
-        fallos.append(
-            "solicitantes.person_emp_exp: inconsistente (debe estar entre 0 y person_age-18)"
-        )
-
-    if (df["cb_person_cred_hist_length"] > df["person_age"]).any() or \
-       (df["cb_person_cred_hist_length"] < 0).any():
-        fallos.append("solicitantes.cb_person_cred_hist_length: inconsistente")
-
-    for col, dominio in CAT_SOLICITANTE.items():
-        invalidos = (~df[col].isin(dominio)).sum()
-        if invalidos:
-            fallos.append(f"solicitantes.{col}: {invalidos} valores fuera del dominio")
-
-    return fallos
-
-
-def auditar_prestamos(df: pd.DataFrame) -> list[str]:
-    fallos: list[str] = []
-
-    if df.isnull().values.any():
-        fallos.append(f"prestamos: {int(df.isnull().sum().sum())} valores nulos")
-
-    rangos = {"loan_int_rate": (5, 30), "loan_percent_income": (0, 1)}
-    for col, (lo, hi) in rangos.items():
-        fuera = (~df[col].between(lo, hi)).sum()
-        if fuera:
-            fallos.append(f"prestamos.{col}: {fuera} filas fuera de [{lo}, {hi}]")
-
+        fallos.append("person_income: tiene valores negativos")
     if (df["loan_amnt"] <= 0).any():
-        fallos.append("prestamos.loan_amnt: tiene valores <= 0")
+        fallos.append("loan_amnt: tiene valores <= 0")
 
-    for col, dominio in CAT_PRESTAMO.items():
-        invalidos = (~df[col].isin(dominio)).sum()
+    if ((df["person_emp_exp"] < 0) | (df["person_emp_exp"] > df["person_age"] - 18)).any():
+        fallos.append("person_emp_exp: inconsistente (debe estar entre 0 y person_age-18)")
+    if ((df["cb_person_cred_hist_length"] < 0)
+            | (df["cb_person_cred_hist_length"] > df["person_age"])).any():
+        fallos.append("cb_person_cred_hist_length: inconsistente (debe estar entre 0 y person_age)")
+
+    for col, dominio in DOMINIOS.items():
+        invalidos = int((~df[col].isin(dominio)).sum())
         if invalidos:
-            fallos.append(f"prestamos.{col}: {invalidos} valores fuera del dominio")
+            fallos.append(f"{col}: {invalidos} valores fuera del dominio")
 
     if not df["loan_status"].isin([0, 1]).all():
-        fallos.append("prestamos.loan_status: contiene valores distintos de 0/1")
+        fallos.append("loan_status: contiene valores distintos de 0/1")
 
     return fallos
 
 
-def auditar_features_solicitante(df: pd.DataFrame) -> list[str]:
-    # solicitantes_transformed no agrega features propias en esta entrega;
-    # los predictores significativos de la entidad solicitante son
-    # categoricos (previous_loan_defaults_on_file, home_ownership) y se
-    # encodean en el pipeline de ML, no aqui.
-    return auditar_solicitantes(df)
-
-
-def auditar_features_prestamo(df: pd.DataFrame) -> list[str]:
-    extra = ["rate_x_pct_income", "loan_burden", "has_prev_defaults"]
-    fallos = auditar_prestamos(df.drop(columns=extra, errors="ignore"))
+def validar_features(df: pd.DataFrame) -> list[str]:
+    fallos = []
     if (df["rate_x_pct_income"] < 0).any():
-        fallos.append("prestamos_transformed.rate_x_pct_income: tiene valores negativos")
+        fallos.append("rate_x_pct_income: tiene valores negativos")
     if (df["loan_burden"] < 0).any():
-        fallos.append("prestamos_transformed.loan_burden: tiene valores negativos")
+        fallos.append("loan_burden: tiene valores negativos")
     if not df["has_prev_defaults"].isin([0, 1]).all():
-        fallos.append("prestamos_transformed.has_prev_defaults: valores fuera de {0, 1}")
+        fallos.append("has_prev_defaults: valores fuera de {0, 1}")
     return fallos
 
 
-def _read(table: str, engine) -> pd.DataFrame:
-    df = pd.read_sql(f"SELECT * FROM {table}", engine)
-    if df.empty:
-        sys.exit(f"[validacion] {table} esta vacia.")
-    return df.drop(columns=[c for c in ("id", "solicitante_id", "fecha_carga") if c in df.columns])
+# ---------------------------------------------------------------------
+# Carga (solo se ejecuta si el gate paso)
+# ---------------------------------------------------------------------
 
+def cargar(df: pd.DataFrame) -> None:
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(text(f"TRUNCATE TABLE {TABLA} RESTART IDENTITY"))
+        df.to_sql(TABLA, conn, if_exists="append", index=False, chunksize=1000)
 
-def _check(nombre: str, fallos: list[str]) -> bool:
-    if fallos:
-        print(f"[validacion] FALLAS en {nombre}:")
-        for f in fallos:
-            print(f"  - {f}")
-        return False
-    print(f"[validacion] {nombre} OK")
-    return True
+    with engine.connect() as conn:
+        n = conn.execute(text(f"SELECT COUNT(*) FROM {TABLA}")).scalar()
+
+    if n != len(df):
+        log.error(f"Conteo post-carga ({n}) no coincide con el CSV ({len(df)}).")
+        sys.exit(1)
+
+    log.info(f"Tabla {TABLA}: {n} filas cargadas y verificadas.")
 
 
 def main() -> None:
-    engine = get_engine()
-    ok = True
+    log.info("=== INICIO VALIDACION (gate de calidad) ===")
 
-    df_sol_c = _read("solicitantes_clean", engine)
-    print(f"[validacion] Auditando {len(df_sol_c)} filas de solicitantes_clean")
-    ok &= _check("solicitantes_clean", auditar_solicitantes(df_sol_c))
-
-    df_pre_c = _read("prestamos_clean", engine)
-    print(f"[validacion] Auditando {len(df_pre_c)} filas de prestamos_clean")
-    ok &= _check("prestamos_clean", auditar_prestamos(df_pre_c))
-
-    df_sol_t = _read("solicitantes_transformed", engine)
-    print(f"[validacion] Auditando {len(df_sol_t)} filas de solicitantes_transformed")
-    ok &= _check("solicitantes_transformed", auditar_features_solicitante(df_sol_t))
-
-    df_pre_t = _read("prestamos_transformed", engine)
-    print(f"[validacion] Auditando {len(df_pre_t)} filas de prestamos_transformed")
-    ok &= _check("prestamos_transformed", auditar_features_prestamo(df_pre_t))
-
-    if not ok:
+    if not CSV_TRANSFORMED.exists():
+        log.error(f"No existe {CSV_TRANSFORMED}. Corre el pipeline desde la ingesta.")
         sys.exit(1)
 
-    defaults = int(df_pre_t["loan_status"].sum())
-    pagados = int((df_pre_t["loan_status"] == 0).sum())
-    print()
-    print(f"[validacion] Resumen: {len(df_pre_t)} prestamos | "
-          f"{defaults} defaults / {pagados} pagados")
+    df = pd.read_csv(CSV_TRANSFORMED)
+    log.info(f"Auditando {len(df)} filas de {CSV_TRANSFORMED.name}")
+
+    fallos = validar_estructura(df)
+    if not fallos:  # las checks semanticas asumen estructura completa
+        fallos += validar_semantica(df)
+        fallos += validar_features(df)
+
+    if fallos:
+        log.error(f"VALIDACION FALLIDA: {len(fallos)} regla(s) violada(s). La BD no se toca.")
+        for f in fallos:
+            log.error(f"  - {f}")
+        sys.exit(1)
+
+    defaults = int(df["loan_status"].sum())
+    pagados = int((df["loan_status"] == 0).sum())
+    log.info(f"Todas las reglas pasan. {len(df)} prestamos | "
+             f"{defaults} defaults / {pagados} pagados")
+    log.info("=== VALIDACION OK -> ejecutando carga ===")
+
+    cargar(df)
+    log.info("=== CARGA OK ===")
 
 
 if __name__ == "__main__":

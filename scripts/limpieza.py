@@ -47,9 +47,25 @@ WINSORIZE_COLS = ["person_income", "loan_amnt"]
 
 
 def remover_duplicados(df: pd.DataFrame) -> pd.DataFrame:
-    n0 = len(df)
-    df = df.drop_duplicates().reset_index(drop=True)
-    log.info(f"Duplicados removidos: {n0 - len(df)}")
+    # Define la función que recibe un DataFrame de pandas y devuelve otro DataFrame ya limpio.
+
+    """Identifica y elimina las filas duplicadas exactas en memoria. 
+    """ 
+
+    # Calcula el número total de filas que son copias exactas sumando los valores booleanos (True) de df.duplicated().
+    # El método df.duplicated() devuelve una Serie booleana donde True indica que la fila es un duplicado de una fila anterior.
+    cantidad_duplicados = int(df.duplicated().sum())
+
+    if cantidad_duplicados > 0:
+        # Registra un mensaje informativo indicando la cantidad exacta de filas duplicadas detectadas.
+        log.info(f"Se identificaron {cantidad_duplicados} filas duplicadas exactas.")
+        # Elimina las filas repetidas (dejando la primera) y reestructura el índice desde 0 hasta N-1 sin conservar el viejo.
+        # El método drop_duplicates() elimina las filas duplicadas, y reset_index(drop=True) restablece el índice del DataFrame resultante sin agregar el índice anterior como una columna.
+        df = df.drop_duplicates().reset_index(drop=True)
+        log.info(f"Duplicados removidos correctamente. Filas restantes: {len(df)}")
+
+    else:
+        log.info("No se identificaron filas duplicadas. Nada que remover.")
     return df
 
 

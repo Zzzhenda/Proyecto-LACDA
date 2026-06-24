@@ -22,3 +22,7 @@ data/X_test.csv
 data/y_test.csv
 models/
 results/
+
+# Figuras y tablas regeneradas por visualizaciones/visualizaciones.ipynb
+# (el notebook deja sus salidas embebidas; output/ es reproducible)
+visualizaciones/output/

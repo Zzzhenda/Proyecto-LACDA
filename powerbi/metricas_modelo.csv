@@ -1,0 +1,7 @@
+metrica,valor
+Accuracy,0.9238
+Precision (default),0.8153
+Recall (default),0.8495
+F1-score (default),0.832
+ROC-AUC,0.975
+Gini,0.95

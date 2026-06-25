@@ -1,0 +1,13 @@
+variable,importancia
+has_prev_defaults,0.3446
+loan_int_rate,0.1448
+loan_percent_income,0.1213
+person_income,0.0995
+person_home_ownership,0.0637
+loan_amnt,0.0511
+credit_score,0.0484
+loan_intent,0.0388
+person_age,0.0306
+cb_person_cred_hist_length,0.0251
+person_education,0.0216
+person_gender,0.0105

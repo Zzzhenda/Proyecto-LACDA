@@ -56,67 +56,87 @@ TODAS = [c for c in ORIGINALES if c != "previous_loan_defaults_on_file"] + [
 # ==========================================
 # 1. ESCALABILIDAD DE LA VALIDACIÓN DEL PIPELINE
 # ==========================================
-filas = []
-for factor in (1, 2, 4, 8):
-    df_n = pd.concat([df_t], ignore_index=True) if factor == 1 else pd.concat([df_t] * factor, ignore_index=True)
-    
-    t0 = time.perf_counter()
-    fallos = (validar_estructura(df_n) + validar_semantica(df_n) + validar_features(df_n))
-    t_valida = time.perf_counter() - t0
+try:
+    filas = []
+    for factor in (1, 2, 4, 8):
+        df_n = pd.concat([df_t], ignore_index=True) if factor == 1 else pd.concat([df_t] * factor, ignore_index=True)
+        
+        t0 = time.perf_counter()
+        fallos = (validar_estructura(df_n) + validar_semantica(df_n) + validar_features(df_n))
+        t_valida = time.perf_counter() - t0
 
-    filas.append({
-        "filas": len(df_n), 
-        "validacion (s)": t_valida
-    })
+        filas.append({
+            "filas": len(df_n), 
+            "validacion (s)": t_valida
+        })
 
-bench = pd.DataFrame(filas).set_index("filas")
+    bench = pd.DataFrame(filas).set_index("filas")
 
-ax = bench.plot(marker="o", figsize=(7.5, 4.5),
-                title="Escalabilidad de las operaciones de validación")
-ax.set_ylabel("segundos")
-ax.set_xlabel("filas procesadas")
-ax.figure.tight_layout()
+    ax = bench.plot(marker="o", figsize=(7.5, 4.5),
+                    title="Escalabilidad de las operaciones de validación")
+    ax.set_ylabel("segundos")
+    ax.set_xlabel("filas procesadas")
+    ax.figure.tight_layout()
 
-plt.savefig(output_dir / "escalabilidad_pipeline.png", dpi=300)
-plt.close()
+    plt.savefig(output_dir / "escalabilidad_pipeline.png", dpi=300)
+    plt.close()
+except FileNotFoundError as e:
+    print(f"Aviso: No se pudo generar el gráfico de escalabilidad debido a la falta de archivos: {e}")
+except Exception as e:
+    print(f"Aviso: Error inesperado al procesar el gráfico de escalabilidad: {e}")
 
 # ==========================================
 # 2. CORRELACIÓN CON EL TARGET
 # ==========================================
-corr = (df_t.select_dtypes("number").corr()["loan_status"]
-        .drop("loan_status").abs().sort_values(ascending=False))
+try:
+    corr = (df_t.select_dtypes("number").corr()["loan_status"]
+            .drop("loan_status").abs().sort_values(ascending=False))
 
-ax = corr.plot.barh(figsize=(7, 4.5), title="|correlación| con loan_status (dataset final)")
-ax.invert_yaxis()
-ax.figure.tight_layout()
+    ax = corr.plot.barh(figsize=(7, 4.5), title="|correlación| con loan_status (dataset final)")
+    ax.invert_yaxis()
+    ax.figure.tight_layout()
 
-plt.savefig(output_dir / "correlacion_target.png", dpi=300)
-plt.close()
+    plt.savefig(output_dir / "correlacion_target.png", dpi=300)
+    plt.close()
+except FileNotFoundError as e:
+    print(f"Aviso: No se pudo generar el gráfico de correlación debido a la falta de archivos: {e}")
+except Exception as e:
+    print(f"Aviso: Error inesperado al procesar el gráfico de correlación: {e}")
 
 # ==========================================
 # 3. DISTRIBUCIÓN DE LA VARIABLE OBJETIVO
 # ==========================================
-ax = y.value_counts().rename({0: "pagado", 1: "default"}).plot.bar(
-    figsize=(5, 3.5), rot=0, title="Distribución de la variable objetivo")
-ax.bar_label(ax.containers[0])
-ax.figure.tight_layout()
+try:
+    ax = y.value_counts().rename({0: "pagado", 1: "default"}).plot.bar(
+        figsize=(5, 3.5), rot=0, title="Distribución de la variable objetivo")
+    ax.bar_label(ax.containers[0])
+    ax.figure.tight_layout()
 
-plt.savefig(output_dir / "distribucion_target.png", dpi=300)
-plt.close()
+    plt.savefig(output_dir / "distribucion_target.png", dpi=300)
+    plt.close()
+except FileNotFoundError as e:
+    print(f"Aviso: No se pudo generar el gráfico de distribución del target debido a la falta de archivos: {e}")
+except Exception as e:
+    print(f"Aviso: Error inesperado al procesar el gráfico de distribución del target: {e}")
 
 # ==========================================
 # 4. MATRIZ DE CORRELACIÓN (HEATMAP)
 # ==========================================
-num = df_t[TODAS].select_dtypes("number")
+try:
+    num = df_t[TODAS].select_dtypes("number")
 
-plt.figure(figsize=(10, 7.5))
-sns.heatmap(num.corr().round(2), cmap="coolwarm", annot=True, fmt=".2f",
-            vmin=-1, vmax=1, cbar_kws={"shrink": 0.8})
-plt.title("Matriz de correlación — variables numéricas", fontweight="bold")
-plt.tight_layout()
+    plt.figure(figsize=(10, 7.5))
+    sns.heatmap(num.corr().round(2), cmap="coolwarm", annot=True, fmt=".2f",
+                vmin=-1, vmax=1, cbar_kws={"shrink": 0.8})
+    plt.title("Matriz de correlación — variables numéricas", fontweight="bold")
+    plt.tight_layout()
 
-plt.savefig(output_dir / "matriz_correlacion_train.png", dpi=300)
-plt.close()
+    plt.savefig(output_dir / "matriz_correlacion_train.png", dpi=300)
+    plt.close()
+except FileNotFoundError as e:
+    print(f"Aviso: No se pudo generar la matriz de correlación debido a la falta de archivos: {e}")
+except Exception as e:
+    print(f"Aviso: Error inesperado al procesar la matriz de correlación: {e}")
 
 # ==========================================
 # 6. GRÁFICO: MÉTRICAS DE CALIDAD Y TIEMPO DE EJECUCIÓN (KPI)
@@ -245,7 +265,6 @@ except Exception as e:
     print(f"Aviso: Error inesperado al procesar el cuadro de mando de KPIs: {e}")
 
 
-
 # ==========================================
 # 10. GRÁFICO: VOLUMEN DE DATOS POR ETAPA DEL PIPELINE
 # ==========================================
@@ -314,7 +333,7 @@ except FileNotFoundError as e:
 except Exception as e:
     print(f"Aviso: Error inesperado al procesar el gráfico de volúmenes: {e}")
 
- # ==========================================
+# ==========================================
 # 11. GRÁFICO: HISTÓRICO DE RENDIMIENTO POR CORRIDA (PERSISTENCIA ACUMULATIVA)
 # ==========================================
 try:

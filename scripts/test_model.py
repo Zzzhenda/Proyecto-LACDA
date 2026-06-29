@@ -22,7 +22,6 @@ import json
 import logging
 import pickle
 import sys
-import re
 from pathlib import Path
 
 import matplotlib
@@ -43,6 +42,7 @@ from sklearn.metrics import (
     roc_curve,
 )
 
+# Configuración de logging
 logging.basicConfig(
     level=logging.INFO,
     format="[%(name)s] %(asctime)s [%(levelname)s] %(message)s",
@@ -50,6 +50,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("test_model")
 
+# Rutas del proyecto
 BASE = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE / "data"
 MODELS_DIR = BASE / "models"
@@ -64,21 +65,26 @@ def main() -> None:
     log.info("=== INICIO EVALUACION DEL MODELO ===")
     RESULTS_DIR.mkdir(exist_ok=True)
 
+    # Validar existencia de artefactos requeridos
     modelo_path = MODELS_DIR / "modelo_default.pkl"
     if not modelo_path.exists():
         log.error(f"No existe {modelo_path}. Corre train_model.py primero.")
         sys.exit(1)
+        
     for f in ("X_test.csv", "y_test.csv"):
         if not (DATA_DIR / f).exists():
             log.error(f"No existe data/{f}. Corre train_model.py primero.")
             sys.exit(1)
 
+    # Carga de datos y modelo
     with open(modelo_path, "rb") as f:
         model = pickle.load(f)
+        
     X_test = pd.read_csv(DATA_DIR / "X_test.csv")
     y_test = pd.read_csv(DATA_DIR / "y_test.csv").squeeze()
     log.info(f"Modelo cargado; holdout de {len(X_test)} filas (nunca visto en el fit).")
 
+    # Predicciones
     y_pred = model.predict(X_test)
     y_prob = model.predict_proba(X_test)[:, 1]
 
@@ -90,55 +96,76 @@ def main() -> None:
         "f1_score": float(f1_score(y_test, y_pred)),
         "roc_auc": float(roc_auc_score(y_test, y_prob)),
     }
+    
     for k, v in metricas.items():
         log.info(f"  {k:10s} = {v:.4f}")
 
     metricas["classification_report"] = classification_report(
         y_test, y_pred, output_dict=True
     )
+    
     with open(RESULTS_DIR / "metricas.json", "w", encoding="utf-8") as f:
         json.dump(metricas, f, indent=4, ensure_ascii=False)
 
-    # ----- Matriz de confusion -----
-    cm = confusion_matrix(y_test, y_pred)
-    plt.figure(figsize=(6, 5))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
-                xticklabels=["pagado", "default"], yticklabels=["pagado", "default"])
-    plt.title("Matriz de Confusión (holdout)", fontweight="bold")
-    plt.xlabel("Predicción")
-    plt.ylabel("Valor real")
-    plt.tight_layout()
-    plt.savefig(RESULTS_DIR / "matriz_confusion.png", dpi=300, bbox_inches="tight")
-    plt.close()
+    # ----- Generación de Gráficos (Protegida con Try/Except) -----
+    log.info("Generando gráficos de evaluación...")
+    
+    # 1. Matriz de confusión
+    try:
+        cm = confusion_matrix(y_test, y_pred)
+        plt.figure(figsize=(6, 5))
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
+                    xticklabels=["pagado", "default"], yticklabels=["pagado", "default"])
+        plt.title("Matriz de Confusión (holdout)", fontweight="bold")
+        plt.xlabel("Predicción")
+        plt.ylabel("Valor real")
+        plt.tight_layout()
+        plt.savefig(RESULTS_DIR / "matriz_confusion.png", dpi=300, bbox_inches="tight")
+        plt.close()
+        log.info("  [OK] Matriz de confusión guardada.")
+    except Exception as e:
+        log.error(f"  [ERROR] No se pudo generar la matriz de confusión: {e}")
+        plt.close()
 
-    # ----- Curva ROC -----
-    fpr, tpr, _ = roc_curve(y_test, y_prob)
-    plt.figure(figsize=(7, 5.5))
-    plt.plot(fpr, tpr, label=f"AUC = {metricas['roc_auc']:.4f}")
-    plt.plot([0, 1], [0, 1], "--", color="grey")
-    plt.xlabel("Tasa de falsos positivos")
-    plt.ylabel("Tasa de verdaderos positivos")
-    plt.title("Curva ROC", fontweight="bold")
-    plt.legend()
-    plt.savefig(RESULTS_DIR / "curva_roc.png", dpi=300, bbox_inches="tight")
-    plt.close()
+    # 2. Curva ROC
+    try:
+        fpr, tpr, _ = roc_curve(y_test, y_prob)
+        plt.figure(figsize=(7, 5.5))
+        plt.plot(fpr, tpr, label=f"AUC = {metricas['roc_auc']:.4f}")
+        plt.plot([0, 1], [0, 1], "--", color="grey")
+        plt.xlabel("Tasa de falsos positivos")
+        plt.ylabel("Tasa de verdaderos positivos")
+        plt.title("Curva ROC", fontweight="bold")
+        plt.legend()
+        plt.savefig(RESULTS_DIR / "curva_roc.png", dpi=300, bbox_inches="tight")
+        plt.close()
+        log.info("  [OK] Curva ROC guardada.")
+    except Exception as e:
+        log.error(f"  [ERROR] No se pudo generar la curva ROC: {e}")
+        plt.close()
 
-    # ----- Curva Precision-Recall -----
-    prec_c, rec_c, _ = precision_recall_curve(y_test, y_prob)
-    pr_auc = auc(rec_c, prec_c)
-    plt.figure(figsize=(7, 5.5))
-    plt.plot(rec_c, prec_c, label=f"PR-AUC = {pr_auc:.4f}")
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.title("Curva Precision-Recall", fontweight="bold")
-    plt.legend()
-    plt.savefig(RESULTS_DIR / "curva_precision_recall.png", dpi=300, bbox_inches="tight")
-    plt.close()
+    # 3. Curva Precision-Recall
+    try:
+        prec_c, rec_c, _ = precision_recall_curve(y_test, y_prob)
+        pr_auc = auc(rec_c, prec_c)
+        plt.figure(figsize=(7, 5.5))
+        plt.plot(rec_c, prec_c, label=f"PR-AUC = {pr_auc:.4f}")
+        plt.xlabel("Recall")
+        plt.ylabel("Precision")
+        plt.title("Curva Precision-Recall", fontweight="bold")
+        plt.legend()
+        plt.savefig(RESULTS_DIR / "curva_precision_recall.png", dpi=300, bbox_inches="tight")
+        plt.close()
+        log.info("  [OK] Curva Precision-Recall guardada.")
+    except Exception as e:
+        log.error(f"  [ERROR] No se pudo generar la curva Precision-Recall: {e}")
+        plt.close()
 
     # ----- Gate de calidad del modelo -----
     if metricas["roc_auc"] < UMBRAL_AUC:
         log.error(f"GATE FALLIDO: ROC-AUC {metricas['roc_auc']:.4f} < umbral {UMBRAL_AUC}")
         sys.exit(1)
+        
     log.info(f"Gate de calidad OK: ROC-AUC {metricas['roc_auc']:.4f} >= {UMBRAL_AUC}")
     log.info("=== EVALUACION OK ===")
 

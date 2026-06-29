@@ -37,13 +37,14 @@ import pandas as pd
 from sklearn.base import clone
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.metrics import accuracy_score, roc_auc_score, f1_score
 
 from validacion import get_engine
 
+# Configuración de logging
 logging.basicConfig(
     level=logging.INFO,
     format="[%(name)s] %(asctime)s [%(levelname)s] %(message)s",
@@ -51,6 +52,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("train_model")
 
+# Rutas del proyecto
 BASE = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE / "data"
 MODELS_DIR = BASE / "models"
@@ -71,11 +73,11 @@ def cargar_datos() -> pd.DataFrame:
     """Tabla loan_data (Postgres) con fallback al CSV transformado."""
     try:
         df = pd.read_sql("SELECT * FROM loan_data", get_engine())
-        log.info(f"Datos leidos desde PostgreSQL (loan_data): {len(df)} filas")
+        log.info(f"Datos leídos desde PostgreSQL (loan_data): {len(df)} filas")
     except Exception as exc:
         log.warning(f"BD no disponible ({type(exc).__name__}); usando CSV transformado.")
         df = pd.read_csv(DATA_DIR / "loan_data_transformed.csv")
-        log.info(f"Datos leidos desde CSV: {len(df)} filas")
+        log.info(f"Datos leídos desde CSV: {len(df)} filas")
     return df
 
 
@@ -93,22 +95,30 @@ def main() -> None:
     X = df[FEATURES]
     y = df[TARGET]
 
-    # Distribucion de la variable objetivo (desbalance 78/22)
-    ax = y.value_counts().rename({0: "pagado", 1: "default"}).plot.pie(
-        autopct="%1.1f%%", figsize=(5, 5), ylabel="",
-        title="Distribución de la variable objetivo",
-    )
-    ax.figure.savefig(RESULTS_DIR / "distribucion_clases.png", dpi=300, bbox_inches="tight")
-    plt.close(ax.figure)
-    log.info(f"Distribucion de clases: {y.value_counts().to_dict()} "
+    # ----- Gráfico: Distribución de Clases (Protegido) -----
+    try:
+        fig_pie, ax_pie = plt.subplots(figsize=(5, 5))
+        y.value_counts().rename({0: "pagado", 1: "default"}).plot.pie(
+            autopct="%1.1f%%", ax=ax_pie, ylabel="",
+            title="Distribución de la variable objetivo",
+        )
+        fig_pie.savefig(RESULTS_DIR / "distribucion_clases.png", dpi=300, bbox_inches="tight")
+        plt.close(fig_pie)
+        log.info("  [OK] Gráfico de distribución de clases guardado.")
+    except Exception as e:
+        log.error(f"  [ERROR] No se pudo generar el gráfico de distribución de clases: {e}")
+        plt.close('all')
+
+    log.info(f"Distribución de clases: {y.value_counts().to_dict()} "
              f"({y.mean():.1%} default) -> class_weight='balanced'")
 
-    # Mismo split del estudio de features: el holdout queda fuera del fit
+    # Split estratificado
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=29, stratify=y
     )
     log.info(f"Split estratificado: train={len(X_train)} test={len(X_test)} (random_state=29)")
 
+    # Preprocesamiento y Pipeline
     categoricas = [c for c in FEATURES if not pd.api.types.is_numeric_dtype(X[c])]
     preprocessor = ColumnTransformer(
         [("cat", OneHotEncoder(handle_unknown="ignore"), categoricas)],
@@ -122,9 +132,9 @@ def main() -> None:
     ])
 
     pipeline.fit(X_train, y_train)
-    log.info("Modelo entrenado (RandomForest 200 arboles, class_weight=balanced).")
+    log.info("Modelo entrenado (RandomForest 200 árboles, class_weight=balanced).")
 
-    # ----- Generación de la Curva de Aprendizaje -----
+    # ----- Cálculo de la Curva de Aprendizaje -----
     log.info("Generando curva de aprendizaje (rendimiento vs. volumen de datos)...")
     fracciones = [0.1, 0.25, 0.5, 0.75, 1.0]
     filas = []
@@ -153,39 +163,44 @@ def main() -> None:
     curva.to_csv(RESULTS_DIR / "curva_aprendizaje.csv", index=False)
     print("\n" + curva.round(4).to_string(index=False) + "\n")
 
-    # Configuración de estilos visuales limpios (idéntico a tu referencia original)
-    AZUL = "#1f65b6"
-    VERDE = "#2a9d8f"
+    # ----- Gráfico: Curva de Aprendizaje (Protegido) -----
+    try:
+        AZUL = "#1f65b6"
+        VERDE = "#2a9d8f"
 
-    fig, ax = plt.subplots(figsize=(8.5, 4.4))
-    ax.plot(curva["n_entrenamiento"], curva["accuracy"], marker="o", color=AZUL, linewidth=2, label="Accuracy")
-    ax.plot(curva["n_entrenamiento"], curva["roc_auc"], marker="s", color=VERDE, linewidth=2, label="ROC-AUC")
-    
-    ax.set_xlabel("Tamaño del conjunto de entrenamiento (registros)", fontsize=10, color="#333333")
-    ax.set_ylabel("Métrica", fontsize=10, color="#333333")
-    ax.set_title("Curva de aprendizaje — rendimiento vs. volumen de datos", fontweight="bold", fontsize=12, pad=15)
-    
-    # Grid sutil horizontal y limpieza estricta de bordes (Flat Design)
-    ax.grid(axis="y", linestyle="-", alpha=0.2, color="grey")
-    ax.grid(axis="x", visible=False)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_color('#cccccc')
-    ax.spines['bottom'].set_color('#cccccc')
-    
-    ax.legend(frameon=False, loc="lower right")
+        fig, ax = plt.subplots(figsize=(8.5, 4.4))
+        ax.plot(curva["n_entrenamiento"], curva["accuracy"], marker="o", color=AZUL, linewidth=2, label="Accuracy")
+        ax.plot(curva["n_entrenamiento"], curva["roc_auc"], marker="s", color=VERDE, linewidth=2, label="ROC-AUC")
+        
+        ax.set_xlabel("Tamaño del conjunto de entrenamiento (registros)", fontsize=10, color="#333333")
+        ax.set_ylabel("Métrica", fontsize=10, color="#333333")
+        ax.set_title("Curva de aprendizaje — rendimiento vs. volumen de datos", fontweight="bold", fontsize=12, pad=15)
+        
+        # Grid sutil horizontal y limpieza estricta de bordes (Flat Design)
+        ax.grid(axis="y", linestyle="-", alpha=0.2, color="grey")
+        ax.grid(axis="x", visible=False)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('#cccccc')
+        ax.spines['bottom'].set_color('#cccccc')
+        
+        ax.legend(frameon=False, loc="lower right")
 
-    # Anotaciones numéricas del valor ROC-AUC arriba de cada marcador verde
-    for _, r in curva.iterrows():
-        ax.annotate(f"{r['roc_auc']:.3f}", (r["n_entrenamiento"], r["roc_auc"]),
-                    textcoords="offset points", xytext=(0, 8), ha="center", 
-                    fontsize=8.5, color=VERDE, fontweight="semibold")
+        # Anotaciones numéricas del valor ROC-AUC arriba de cada marcador verde
+        for _, r in curva.iterrows():
+            ax.annotate(f"{r['roc_auc']:.3f}", (r["n_entrenamiento"], r["roc_auc"]),
+                        textcoords="offset points", xytext=(0, 8), ha="center", 
+                        fontsize=8.5, color=VERDE, fontweight="semibold")
 
-    plt.tight_layout()
-    plt.savefig(RESULTS_DIR / "curva_aprendizaje.png", dpi=300, bbox_inches="tight")
-    plt.close()
+        plt.tight_layout()
+        plt.savefig(RESULTS_DIR / "curva_aprendizaje.png", dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        log.info("  [OK] Gráfico de curva de aprendizaje guardado.")
+    except Exception as e:
+        log.error(f"  [ERROR] No se pudo generar el gráfico de la curva de aprendizaje: {e}")
+        plt.close('all')
 
-    # Guardar modelo y holdout (bug del material original: nunca los guardaba)
+    # Guardar modelo y holdout (Garantizado post-gráficos)
     with open(MODELS_DIR / "modelo_default.pkl", "wb") as f:
         pickle.dump(pipeline, f)
     X_test.to_csv(DATA_DIR / "X_test.csv", index=False)

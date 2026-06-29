@@ -18,4 +18,4 @@ USER appuser
 # Si una etapa falla (exit != 0), las siguientes no se ejecutan (gracias a `&&`).
 # La carga a la BD ocurre dentro de validacion.py, solo si todas las reglas pasan.
 # Para correr una etapa puntual: docker compose run --rm app python scripts/<etapa>.py
-CMD ["sh", "-c", "python scripts/ingesta.py && python scripts/qualitycheck.py && python scripts/limpieza.py && python scripts/transformacion.py && python scripts/validacion.py && python scripts/train_model.py && python scripts/test_model.py"]
+CMD ["sh", "-c", "python scripts/ingesta.py && python scripts/qualitycheck.py && python scripts/limpieza.py && python scripts/transformacion.py && python scripts/validacion.py && python scripts/train_model.py && python scripts/test_model.py && python scripts/visuals.py"]

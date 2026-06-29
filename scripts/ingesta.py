@@ -37,7 +37,7 @@ logging.basicConfig(
 log = logging.getLogger("ingesta")
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-CSV_FUENTE = DATA_DIR / "loan_data.csv"
+CSV_FUENTE = DATA_DIR / "03_Base_Loan_Nueva_Ingesta.csv"
 CSV_RAW = DATA_DIR / "loan_data_raw.csv"
 
 # ---------------------------------------------------------------------

@@ -14,8 +14,7 @@ RUN useradd --create-home appuser
 COPY . .
 USER appuser
 
-# Pipeline completo: ingesta -> qualitycheck -> limpieza -> transformacion -> validacion (+carga).
+# Pipeline completo: ingesta -> qualitycheck -> limpieza -> transformacion -> validacion (+carga) -> train -> test -> visuals -> DASHBOARD.
 # Si una etapa falla (exit != 0), las siguientes no se ejecutan (gracias a `&&`).
-# La carga a la BD ocurre dentro de validacion.py, solo si todas las reglas pasan.
-# Para correr una etapa puntual: docker compose run --rm app python scripts/<etapa>.py
-CMD ["sh", "-c", "python scripts/ingesta.py && python scripts/qualitycheck.py && python scripts/limpieza.py && python scripts/transformacion.py && python scripts/validacion.py && python scripts/train_model.py && python scripts/test_model.py && python scripts/visuals.py"]
+# Al final de toda la cadena secuencial, se levanta el servidor persistente de Streamlit.
+CMD ["sh", "-c", "python scripts/ingesta.py && python scripts/qualitycheck.py && python scripts/limpieza.py && python scripts/transformacion.py && python scripts/validacion.py && python scripts/train_model.py && python scripts/test_model.py && python scripts/visuals.py && streamlit run scripts/app.py --server.port=8501 --server.address=0.0.0.0"]

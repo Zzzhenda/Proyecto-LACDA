@@ -15,8 +15,7 @@ Cambios respecto del original y su justificacion:
     categorias sueltas contra variables numericas completas).
 
 Salidas en results/: metricas.json, matriz_confusion.png, curva_roc.png,
-curva_precision_recall.png, importancia_variables.png/.csv,
-distribucion_probabilidades.png.
+curva_precision_recall.png.
 """
 
 import json
@@ -135,41 +134,6 @@ def main() -> None:
     plt.legend()
     plt.savefig(RESULTS_DIR / "curva_precision_recall.png", dpi=300, bbox_inches="tight")
     plt.close()
-
-    # ----- Importancia por variable de origen -----
-    rf = model.named_steps["classifier"]
-    nombres = model.named_steps["preprocessor"].get_feature_names_out()
-    features = list(X_test.columns)
-    candidatas = sorted(features, key=len, reverse=True)
-
-    def col_base(n: str) -> str:
-        n = n.split("__", 1)[1]
-        return next(c for c in candidatas if n == c or n.startswith(c + "_"))
-
-    imp = (pd.Series(rf.feature_importances_, index=[col_base(n) for n in nombres])
-           .groupby(level=0).sum().sort_values(ascending=False))
-    imp.to_frame("importancia").to_csv(RESULTS_DIR / "importancia_variables.csv")
-    log.info(f"Top 5 variables: {', '.join(imp.head(5).index)}")
-
-    plt.figure(figsize=(8, 5.5))
-    sns.barplot(x=imp.values, y=imp.index, orient="h")
-    plt.title("Importancia agregada por variable", fontweight="bold")
-    plt.xlabel("Importancia")
-    plt.tight_layout()
-    plt.savefig(RESULTS_DIR / "importancia_variables.png", dpi=300, bbox_inches="tight")
-    plt.close()
-
-    # ----- Distribucion de probabilidades -----
-    plt.figure(figsize=(7, 4.5))
-    plt.hist(y_prob, bins=30)
-    plt.title("Distribución de probabilidades predichas", fontweight="bold")
-    plt.xlabel("Probabilidad de default")
-    plt.ylabel("Frecuencia")
-    plt.tight_layout()
-    plt.savefig(RESULTS_DIR / "distribucion_probabilidades.png", dpi=300, bbox_inches="tight")
-    plt.close()
-
-    log.info(f"Resultados guardados en {RESULTS_DIR}/")
 
     # ----- Gate de calidad del modelo -----
     if metricas["roc_auc"] < UMBRAL_AUC:

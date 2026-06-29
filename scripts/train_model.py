@@ -16,11 +16,13 @@ Cambios respecto del original y su justificacion:
     curso, test_model.py leia archivos que nunca se guardaban).
   * SMOTE descartado por ahora: con class_weight="balanced" el recall en
     CV ya es ~0.84; queda como experimento si el test final lo refuta.
+  * Agregada la curva de aprendizaje para diagnosticar rendimiento vs. volumen.
 
 Salidas:
   * models/modelo_default.pkl       (pipeline OHE + RF entrenado)
   * data/X_test.csv, data/y_test.csv (holdout 20%, nunca visto en el fit)
   * results/distribucion_clases.png
+  * results/curva_aprendizaje.png, results/curva_aprendizaje.csv
 """
 
 import logging
@@ -32,11 +34,13 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
+from sklearn.base import clone
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.metrics import accuracy_score, roc_auc_score, f1_score
 
 from validacion import get_engine
 
@@ -119,6 +123,67 @@ def main() -> None:
 
     pipeline.fit(X_train, y_train)
     log.info("Modelo entrenado (RandomForest 200 arboles, class_weight=balanced).")
+
+    # ----- Generación de la Curva de Aprendizaje -----
+    log.info("Generando curva de aprendizaje (rendimiento vs. volumen de datos)...")
+    fracciones = [0.1, 0.25, 0.5, 0.75, 1.0]
+    filas = []
+    
+    for fr in fracciones:
+        if fr < 1.0:
+            Xi, _, yi, _ = train_test_split(
+                X_train, y_train, train_size=fr, random_state=29, stratify=y_train
+            )
+        else:
+            Xi, yi = X_train, y_train
+            
+        m = clone(pipeline)
+        m.fit(Xi, yi)
+        p = m.predict(X_test)
+        pr = m.predict_proba(X_test)[:, 1]
+        
+        filas.append({
+            "n_entrenamiento": len(Xi),
+            "accuracy": accuracy_score(y_test, p),
+            "roc_auc": roc_auc_score(y_test, pr),
+            "f1_score": f1_score(y_test, p),
+        })
+
+    curva = pd.DataFrame(filas)
+    curva.to_csv(RESULTS_DIR / "curva_aprendizaje.csv", index=False)
+    print("\n" + curva.round(4).to_string(index=False) + "\n")
+
+    # Configuración de estilos visuales limpios (idéntico a tu referencia original)
+    AZUL = "#1f65b6"
+    VERDE = "#2a9d8f"
+
+    fig, ax = plt.subplots(figsize=(8.5, 4.4))
+    ax.plot(curva["n_entrenamiento"], curva["accuracy"], marker="o", color=AZUL, linewidth=2, label="Accuracy")
+    ax.plot(curva["n_entrenamiento"], curva["roc_auc"], marker="s", color=VERDE, linewidth=2, label="ROC-AUC")
+    
+    ax.set_xlabel("Tamaño del conjunto de entrenamiento (registros)", fontsize=10, color="#333333")
+    ax.set_ylabel("Métrica", fontsize=10, color="#333333")
+    ax.set_title("Curva de aprendizaje — rendimiento vs. volumen de datos", fontweight="bold", fontsize=12, pad=15)
+    
+    # Grid sutil horizontal y limpieza estricta de bordes (Flat Design)
+    ax.grid(axis="y", linestyle="-", alpha=0.2, color="grey")
+    ax.grid(axis="x", visible=False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('#cccccc')
+    ax.spines['bottom'].set_color('#cccccc')
+    
+    ax.legend(frameon=False, loc="lower right")
+
+    # Anotaciones numéricas del valor ROC-AUC arriba de cada marcador verde
+    for _, r in curva.iterrows():
+        ax.annotate(f"{r['roc_auc']:.3f}", (r["n_entrenamiento"], r["roc_auc"]),
+                    textcoords="offset points", xytext=(0, 8), ha="center", 
+                    fontsize=8.5, color=VERDE, fontweight="semibold")
+
+    plt.tight_layout()
+    plt.savefig(RESULTS_DIR / "curva_aprendizaje.png", dpi=300, bbox_inches="tight")
+    plt.close()
 
     # Guardar modelo y holdout (bug del material original: nunca los guardaba)
     with open(MODELS_DIR / "modelo_default.pkl", "wb") as f:

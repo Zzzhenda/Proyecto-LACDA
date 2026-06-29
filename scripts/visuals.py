@@ -119,33 +119,6 @@ plt.savefig(output_dir / "matriz_correlacion_train.png", dpi=300)
 plt.close()
 
 # ==========================================
-# 5. IMPORTANCIA DE VARIABLES (RF)
-# ==========================================
-try:
-    with open(MODELS / "modelo_default.pkl", "rb") as f:
-        pipe = pickle.load(f)
-
-    nombres = pipe.named_steps["preprocessor"].get_feature_names_out()
-    imps = pipe.named_steps["classifier"].feature_importances_
-
-    candidatas = sorted(TODAS, key=len, reverse=True)
-    def col_base(n):
-        n = n.split("__", 1)[1]
-        return next(c for c in candidatas if n == c or n.startswith(c + "_"))
-
-    imp_var = (pd.Series(imps, index=[col_base(n) for n in nombres])
-               .groupby(level=0).sum().sort_values(ascending=False))
-
-    ax = imp_var.plot.barh(figsize=(7, 5), title="Importancia agregada por variable (RF)")
-    ax.invert_yaxis()
-    ax.figure.tight_layout()
-
-    plt.savefig(output_dir / "importancia_variables_rf.png", dpi=300)
-    plt.close()
-except FileNotFoundError:
-    print("Aviso: No se encontró 'models/modelo_default.pkl', omitiendo gráfico de importancia.")
-
-    # ==========================================
 # 6. GRÁFICO: MÉTRICAS DE CALIDAD Y TIEMPO DE EJECUCIÓN (KPI)
 # ==========================================
 try:
@@ -204,3 +177,258 @@ except FileNotFoundError as e:
     print(f"Aviso: No se pudo generar el KPI de métricas debido a la falta de archivos: {e}")
 except Exception as e:
     print(f"Aviso: Error inesperado al procesar el gráfico de calidad: {e}")
+
+# ==========================================
+# 7. GRÁFICO: INDICADORES CLAVE DEL MODELO (KPIS DASHBOARD) & PERSISTENCIA JSON
+# ==========================================
+try:
+    # 1. Asegurar la carga de dependencias previas necesarias si no se han cargado antes
+    with open(RESULTS / "metricas.json", "r", encoding="utf-8") as f:
+        metricas = json.load(f)
+
+    X_test = pd.read_csv(DATA / "X_test.csv")
+    
+    with open(MODELS / "modelo_default.pkl", "rb") as f:
+        model = pickle.load(f)
+    
+    t0 = time.perf_counter()
+    _ = model.predict(X_test)
+    t_infer = time.perf_counter() - t0
+
+    # 2. Definición de colores para la paleta de KPIs
+    AZUL = "#1f77b4"
+    VERDE = "#2ca02c"
+    GRIS = "#7f7f7f"
+
+    # Estructura de los indicadores
+    kpis = [
+        ("Accuracy",  f"{metricas['accuracy']*100:.1f}%",  AZUL),
+        ("Recall (default)", f"{metricas['recall']*100:.1f}%", VERDE),
+        ("F1 (default)", f"{metricas['f1_score']*100:.1f}%", AZUL),
+        ("ROC-AUC",  f"{metricas['roc_auc']:.3f}", VERDE),
+        ("Tiempo infer.", f"{t_infer*1000:.0f} ms", GRIS),
+    ]
+
+    # Crear la cuadrícula de KPIs en horizontal
+    fig, axes = plt.subplots(1, len(kpis), figsize=(2.5 * len(kpis), 1.9))
+    
+    for ax, (etq, val, color) in zip(axes, kpis):
+        ax.axis("off")
+        ax.add_patch(plt.Rectangle((0.05, 0.10), 0.90, 0.80, transform=ax.transAxes,
+                                   facecolor=color, alpha=0.10, edgecolor=color, lw=1.4, zorder=0))
+        ax.text(0.5, 0.60, val, transform=ax.transAxes, ha="center", va="center",
+                fontsize=19, fontweight="bold", color=color)
+        ax.text(0.5, 0.26, etq, transform=ax.transAxes, ha="center", va="center",
+                fontsize=10, color="#333")
+                
+    fig.suptitle("Indicadores clave del modelo (holdout de {:,} solicitudes)".format(len(X_test)),
+                 fontsize=12, fontweight="bold", y=1.05)
+    
+    # Guardar gráfico de KPIs en la carpeta de resultados
+    plt.savefig(RESULTS / "01_kpis.png", dpi=300, bbox_inches="tight")
+    plt.close()
+    print("Gráfico '01_kpis.png' guardado exitosamente en results/")
+
+    # 3. Persistir KPIs como resultado estructurado JSON
+    resumen = {k: round(metricas[k], 4) for k in ['accuracy', 'precision', 'recall', 'f1_score', 'roc_auc']}
+    resumen["tiempo_inferencia_ms"] = round(t_infer * 1000, 2)
+    resumen["n_holdout"] = int(len(X_test))
+    resumen["generado"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Guardar el JSON en la carpeta results asignada arriba
+    (RESULTS / "resumen_kpis.json").write_text(json.dumps(resumen, indent=2, ensure_ascii=False), encoding="utf-8")
+    print("KPIs guardados exitosamente en results/resumen_kpis.json")
+
+except FileNotFoundError as e:
+    print(f"Aviso: No se pudo generar el cuadro de mando de KPIs por archivos faltantes: {e}")
+except Exception as e:
+    print(f"Aviso: Error inesperado al procesar el cuadro de mando de KPIs: {e}")
+
+
+
+# ==========================================
+# 10. GRÁFICO: VOLUMEN DE DATOS POR ETAPA DEL PIPELINE
+# ==========================================
+try:
+    # 1. Función auxiliar local para contar registros
+    def contar_csv(ruta: Path):
+        return len(pd.read_csv(ruta)) if ruta.exists() else None
+
+    # Carga de variables necesarias para el conteo
+    n_ingesta = contar_csv(DATA / "loan_data_raw.csv")
+    n_limpieza = contar_csv(DATA / "loan_data_clean.csv")
+    n_transf = contar_csv(DATA / "loan_data_transformed.csv")
+    
+    # Adaptación a las variables ya existentes en visuals.py
+    n_bd = int(len(df_t))                    # filas finales transformadas
+    n_test = int(len(X_test))                # holdout de evaluación
+    n_train = n_transf - n_test if n_transf else None
+
+    # Creación del DataFrame de volúmenes
+    etapas = pd.DataFrame({
+        "etapa": ["1 · Ingesta", "3 · Limpieza", "4 · Transformación",
+                  "5 · Carga BD", "ML · Entrenamiento", "ML · Holdout"],
+        "filas": [n_ingesta, n_limpieza, n_transf, n_bd, n_train, n_test],
+    })
+    
+    # Guardar CSV de control en la carpeta results/
+    etapas.to_csv(RESULTS / "volumen_pipeline.csv", index=False)
+
+    # 2. Paleta de colores extendida
+    AZUL = "#1f77b4"
+    VERDE = "#2ca02c"
+    GRIS = "#7f7f7f"
+    NARANJA = "#ff7f0e"
+    ROJO = "#d62728"
+
+    colores = [AZUL, AZUL, AZUL, VERDE, GRIS, NARANJA]
+    
+    fig, ax = plt.subplots(figsize=(9, 4.2))
+    barras = ax.barh(etapas["etapa"], etapas["filas"], color=colores)
+    ax.invert_yaxis()                      # Flujo estructurado de arriba hacia abajo
+    ax.set_xlabel("Registros")
+    ax.set_title("Volumen de datos por etapa del pipeline")
+    ax.margins(x=0.12)
+    ax.grid(axis="y", visible=False)
+    
+    # Reemplazo nativo de etiquetar_barras para gráficos horizontales
+    ax.bar_label(barras, fmt="{:,.0f}", fontsize=10, color="#333", padding=5)
+
+    # Anotar registros descartados en la limpieza de datos
+    descartados = (n_ingesta - n_limpieza) if (n_ingesta and n_limpieza) else 0
+    tasa_retencion = (n_limpieza / n_ingesta) if (n_ingesta and n_ingesta > 0) else 0
+    
+    ax.annotate(f"Descartados en limpieza: {descartados:,}  (retención {tasa_retencion:.1%})",
+                xy=(0.5, -0.22), xycoords="axes fraction", ha="center",
+                fontsize=9.5, color=ROJO if descartados else GRIS)
+    
+    # Guardar gráfico definitivo en formato PNG
+    plt.savefig(RESULTS / "02_volumen_etapas.png", dpi=300, bbox_inches="tight")
+    plt.close()
+    
+    print("Gráfico '02_volumen_etapas.png' y CSV guardados con éxito en results/")
+    print(etapas.to_string(index=False))
+
+except FileNotFoundError as e:
+    print(f"Aviso: No se pudo calcular el volumen por etapas debido a archivos faltantes: {e}")
+except Exception as e:
+    print(f"Aviso: Error inesperado al procesar el gráfico de volúmenes: {e}")
+
+ # ==========================================
+# 11. GRÁFICO: HISTÓRICO DE RENDIMIENTO POR CORRIDA (PERSISTENCIA ACUMULATIVA)
+# ==========================================
+try:
+    # 1. Configuración del archivo histórico acumulativo en results/
+    hist_path = RESULTS / "historico_evaluaciones.csv"
+    
+    # Generación de la nueva fila de métricas con marca de tiempo
+    fila = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "n_holdout": int(len(X_test)),
+        **{k: round(metricas[k], 4) for k in ["accuracy", "precision", "recall", "f1_score", "roc_auc"]},
+    }
+    
+    # Leer el archivo histórico actual si existe, de lo contrario inicializar vacío
+    hist = pd.read_csv(hist_path) if hist_path.exists() else pd.DataFrame()
+    hist = pd.concat([hist, pd.DataFrame([fila])], ignore_index=True)
+    hist.to_csv(hist_path, index=False)
+
+    # 2. Paleta de colores para las líneas del gráfico
+    AZUL = "#1f77b4"
+    VERDE = "#2ca02c"
+    NARANJA = "#ff7f0e"
+    GRIS = "#7f7f7f"
+
+    # Construcción del gráfico evolutivo
+    fig, ax = plt.subplots(figsize=(8.5, 4))
+    ejex = range(1, len(hist) + 1)
+    
+    ax.plot(ejex, hist["accuracy"], marker="o", color=AZUL, label="Accuracy")
+    ax.plot(ejex, hist["roc_auc"], marker="s", color=VERDE, label="ROC-AUC")
+    ax.plot(ejex, hist["f1_score"], marker="^", color=NARANJA, label="F1-Score")
+    
+    ax.set_xticks(list(ejex))
+    ax.set_xlabel("N.º de corrida")
+    ax.set_ylabel("Métrica")
+    ax.set_title("Histórico de rendimiento por corrida")
+    ax.grid(axis="x", visible=False)
+    ax.legend(frameon=False, ncol=3)
+    
+    # Mensaje de ayuda visual en caso de ser la primera ejecución del pipeline
+    if len(hist) == 1:
+        ax.set_ylim(0, 1.05)
+        ax.text(1, 0.5, "  1.ª corrida registrada.\n  Se acumula automáticamente\n  en cada ejecución.",
+                fontsize=9, color=GRIS, va="center")
+                
+    # Guardar gráfico definitivo en formato PNG en la carpeta results/
+    plt.savefig(RESULTS / "06b_historico_rendimiento.png", dpi=300, bbox_inches="tight")
+    plt.close()
+    
+    print(f"Gráfico '06b_historico_rendimiento.png' guardado con éxito.")
+    print(f"Corridas registradas acumuladas: {len(hist)} en {hist_path}")
+
+except FileNotFoundError as e:
+    print(f"Aviso: No se pudo actualizar el histórico por falta de archivos bases: {e}")
+except Exception as e:
+    print(f"Aviso: Error inesperado al procesar el gráfico histórico: {e}")
+
+
+# ==========================================
+# 12. GRÁFICO: DISTRIBUCIÓN DE CLASES — REAL VS. PREDICHO
+# ==========================================
+try:
+    # 1. Cargar el modelo y los datos necesarios para generar las predicciones
+    with open(MODELS / "modelo_default.pkl", "rb") as f:
+        model = pickle.load(f)
+    
+    X_test = pd.read_csv(DATA / "X_test.csv")
+    # Nota: Se asume que las etiquetas reales están guardadas en data/y_test.csv
+    y_test = pd.read_csv(DATA / "y_test.csv").iloc[:, 0]  
+    
+    # Generar predicciones en caliente
+    y_pred = model.predict(X_test)
+
+    # 2. Procesar las frecuencias de clases reales y predichas
+    real = pd.Series(y_test).value_counts().reindex([0, 1]).fillna(0).astype(int)
+    pred = pd.Series(y_pred).value_counts().reindex([0, 1]).fillna(0).astype(int)
+    
+    clases = ["Pagado (0)", "Default (1)"]
+    x = np.arange(len(clases))
+    w = 0.38
+
+    # 3. Configuración de estilos visuales consistentes con el script
+    AZUL = "#1f77b4"
+    GRIS = "#7f7f7f"
+
+    fig, ax = plt.subplots(figsize=(7.5, 4.3))
+    b1 = ax.bar(x - w / 2, real.values, w, label="Real", color=GRIS)
+    b2 = ax.bar(x + w / 2, pred.values, w, label="Predicho", color=AZUL)
+    
+    ax.set_xticks(x, clases)
+    ax.set_ylabel("N.º de solicitudes")
+    ax.set_title("Distribución de clases — real vs. predicho", fontweight="bold")
+    ax.grid(axis="x", visible=False)
+    ax.legend(frameon=False)
+    ax.margins(y=0.15)
+    
+    # Reemplazo nativo de 'etiquetar_barras' usando la API de Matplotlib
+    ax.bar_label(b1, fmt="{:,.0f}", fontsize=9.5, color="#555", padding=3)
+    ax.bar_label(b2, fmt="{:,.0f}", fontsize=9.5, color="#333", padding=3)
+    
+    # Guardar el PNG directamente en la carpeta de resultados estructurada
+    plt.savefig(RESULTS / "05_distribucion_clases.png", dpi=300, bbox_inches="tight")
+    plt.close()
+    print("Gráfico '05_distribucion_clases.png' guardado con éxito en results/")
+
+    # 4. Cálculo e impresión del sesgo de estimación
+    if real[1] > 0:
+        sesgo = (pred[1] - real[1]) / real[1]
+        print(f"Defaults reales: {real[1]:,} | predichos: {pred[1]:,} "
+              f"({'sobre' if sesgo > 0 else 'sub'}estimación {abs(sesgo):.1%})")
+    else:
+        print(f"Defaults reales: 0 | predichos: {pred[1]:,}")
+
+except FileNotFoundError as e:
+    print(f"Aviso: No se pudo generar el gráfico de distribución de clases por archivos faltantes: {e}")
+except Exception as e:
+    print(f"Aviso: Error inesperado al procesar la distribución de clases real vs. predicho: {e}")

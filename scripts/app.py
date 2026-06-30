@@ -121,7 +121,7 @@ try:
         y_test = pd.read_csv(DATA_DIR / "y_test.csv").iloc[:, 0]
 
 except Exception as e:
-    st.sidebar.warning(f" Algunos componentes de ML no se pudieron cargar en caliente: {e}")
+    st.sidebar.warning(f" Algunos componentes de ML no se pudieron cargar: {e}")
 
 # ==========================================
 # RE-GENERACIÓN SILENCIOSA DE ARTEFACTOS FALTANTES

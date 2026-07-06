@@ -13,6 +13,7 @@
 --     gate de validacion (validacion.py sale con exit 1 si algo falla,
 --     y la carga nunca se ejecuta).
 
+
 CREATE TABLE IF NOT EXISTS loan_data (
     id                              SERIAL PRIMARY KEY,
 

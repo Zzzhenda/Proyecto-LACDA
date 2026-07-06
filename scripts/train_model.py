@@ -130,7 +130,7 @@ def main() -> None:
             n_estimators=200, random_state=29, n_jobs=-1, class_weight="balanced",
         )),
     ])
-
+    
     pipeline.fit(X_train, y_train)
     log.info("Modelo entrenado (RandomForest 200 árboles, class_weight=balanced).")
 

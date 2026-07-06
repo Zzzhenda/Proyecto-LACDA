@@ -32,6 +32,9 @@ services:
       DB_USER: ${POSTGRES_USER:-lacda}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-lacda_pass}
       DB_NAME: ${POSTGRES_DB:-loans}
+      # --- CREDENCIALES DE AUTENTICACIÓN PARA STREAMLIT ---
+      APP_USER: ${APP_USER:-admin_lacda}
+      APP_PASSWORD: ${APP_PASSWORD:-password_lacda}
     volumes:
       - .:/app
     working_dir: /app

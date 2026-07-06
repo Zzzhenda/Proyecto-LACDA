@@ -25,6 +25,48 @@ from sklearn.preprocessing import OneHotEncoder
 # 4. Streamlit e Integración UI
 import streamlit as st
 
+import os  #  Necesario para leer variables de entorno de Docker
+st.set_page_config(
+    page_title="Dashboard de Monitoreo - Pipeline de Crédito",
+    page_icon="",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ==========================================
+# SISTEMA DE AUTENTICACIÓN
+# ==========================================
+def check_password():
+    if "authenticated" not in st.session_state:
+        st.session_state["authenticated"] = False
+
+    if st.session_state["authenticated"]:
+        return True
+
+    st.title("Acceso Restringido — Créditos LACDA")
+    st.markdown("Por favor, introduce tus credenciales para acceder al sistema.")
+    
+    usuario_ingresado = st.text_input("Usuario", key="username")
+    password_ingresado = st.text_input("Contraseña", type="password", key="password")
+    
+    # Lee las variables que configuraste en tu archivo .env
+    USER_CORRECTO = os.environ.get("APP_USER", "admin_lacda")
+    PASSWORD_CORRECTO = os.environ.get("APP_PASSWORD", "password_lacda")
+
+    if st.button("Iniciar Sesión"):
+        if usuario_ingresado == USER_CORRECTO and password_ingresado == PASSWORD_CORRECTO:
+            st.session_state["authenticated"] = True
+            st.success("¡Acceso concedido!")
+            st.rerun()
+        else:
+            st.error("Usuario o contraseña incorrectos.")
+            
+    return False
+
+# Si no está autenticado, detiene la ejecución de todo el dashboard que viene abajo
+if not check_password():
+    st.stop()
+
 # Módulos locales personalizados (Solo validación)
 try:
     from validacion import validar_estructura, validar_features, validar_semantica
